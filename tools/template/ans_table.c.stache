@@ -1,0 +1,25 @@
+#include "ans_table.h"
+
+const state_t states[table_size] = {
+    {{states}}
+};
+
+const state_t new_x[table_size] = {
+    {{new_x}}
+};
+
+const encoding_table_t encoding_table[table_size] = {
+    {{encoding_table}}
+};
+
+const nb_bits_t nb_bits_delta[table_size] = {
+    {{nb_bits}}
+};
+
+const nb_bits_t nb[table_size] = {
+    {{nb}}
+};
+
+const state_delta_t start[alphabet_length] = {
+    {{start}}
+};

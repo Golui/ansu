@@ -1,0 +1,5 @@
+.magicindex.*
+.DS_Store
+*.ipynb*
+bin
+ansu

@@ -4,20 +4,20 @@ SOURCE := src
 #OBJECT := $(SOURCE:.c=.o)
 BIN := bin
 
-CPP := gcc
+CPP := /usr/local/opt/llvm/bin/clang++
 
-CPP_FLAGS := -MMD -MP -Wall -g -pedantic -I$(INCLUDE)
+CPP_FLAGS := -MMD -MP -Wall -g -pedantic -std=c++14 -DNO_VIVADO -I$(INCLUDE)
 
-CFILES := $(shell find $(SOURCE) -name "*.c")
-HFILES := $(shell find $(INCLUDE) -name "*.h")
+CFILES := $(shell find $(SOURCE) -name "*.cpp")
+HFILES := $(shell find $(INCLUDE) -name "*.hpp")
 
-OFILES := $(patsubst $(SOURCE)/%.c,$(BIN)/%.o, $(CFILES))
+OFILES := $(patsubst $(SOURCE)/%.cpp,$(BIN)/%.o, $(CFILES))
 
 LD_FLAGS := $(LD_FLAGS)
 
 all: ansu
 
-$(BIN)/%.o: $(SOURCE)/%.c
+$(BIN)/%.o: $(SOURCE)/%.cpp
 	@-mkdir -p $(@D)
 	$(CPP) $(CPP_FLAGS) -o $@ -c $<
 

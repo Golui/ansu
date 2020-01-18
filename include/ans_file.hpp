@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ints.h"
-#include "ansu.h"
-#include "ans_table.h"
+#include "ints.hpp"
+#include "ansu.hpp"
+#include "ans_table.hpp"
 
 typedef struct _ANSFileBlockEntry {
 	ANSBlock block;

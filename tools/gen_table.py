@@ -68,6 +68,8 @@ class ANS:
         self.start = [-s + sum(self.q[:si])
                       for si, s in enumerate(self.q)]
 
+        self.adj_start = [s % self.ts for s in self.start]
+
         next_ = copy.deepcopy(self.q)
 
         self.encoding_table = [0] * self.ts
@@ -137,26 +139,22 @@ def comma_sep(what):
 def cify(ans):
     renderer = ps.Renderer()
     dt = pick_datatype(2*ans.allen - 1)
-    rendered_h = renderer.render_path("template/ans_table.h.stache", {
+    rendered_h = renderer.render_path("template/ans_table.hpp.stache", {
         "ans": ans,
         "message_dt": pick_datatype(ans.allen - 1),
         "state_dt": dt,
         "state_delta_dt": dt[1:],
-    })
-    rendered_c = renderer.render_path("template/ans_table.c.stache", {
         "states": comma_sep(ans.states),
         "new_x": comma_sep(ans.new_x),
         "encoding_table": comma_sep(ans.encoding_table),
         "nb_bits": comma_sep(ans.nb_bits),
         "nb": comma_sep(ans.nb(x) for x in range(ans.allen)),
-        "start": comma_sep(ans.start)
+        "start": comma_sep(ans.start),
+        "adj_start": comma_sep(ans.adj_start)
     })
 
-    with open("out/ans_table.h", "w") as f:
+    with open("out/ans_table.hpp", "w") as f:
         f.write(rendered_h)
-
-    with open("out/ans_table.c", "w") as f:
-        f.write(rendered_c)
 
 
 def occurences2prob(*args):

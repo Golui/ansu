@@ -1,0 +1,40 @@
+#pragma once
+
+#include <stdint.h>
+
+typedef {{state_dt}} state_t;
+typedef {{state_delta_dt}} state_delta_t;
+typedef state_t encoding_table_t;
+typedef uint8_t nb_bits_t;
+
+#define TABLE_SIZE_LOG {{ans.tsl}}
+#define TABLE_SIZE {{ans.ts}}
+#define ALPHABET_LENGTH {{ans.allen}}
+
+const state_t states[TABLE_SIZE] = {
+    {{states}}
+};
+
+const state_t new_x[TABLE_SIZE] = {
+    {{new_x}}
+};
+
+const encoding_table_t encoding_table[TABLE_SIZE] = {
+    {{encoding_table}}
+};
+
+const nb_bits_t nb_bits_delta[TABLE_SIZE] = {
+    {{nb_bits}}
+};
+
+const nb_bits_t nb[TABLE_SIZE] = {
+    {{nb}}
+};
+
+const state_delta_t start[ALPHABET_LENGTH] = {
+    {{start}}
+};
+
+const state_t adj_start[ALPHABET_LENGTH] = {
+    {{adj_start}}
+};

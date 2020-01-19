@@ -7,10 +7,7 @@ namespace polyfill
 	{
 		std::queue<T> backend;
 
-		bool empty()
-		{
-			return backend.empty();
-		}
+		bool empty() { return backend.empty(); }
 
 		T read()
 		{
@@ -34,7 +31,7 @@ namespace polyfill
 		str.backend.push(val);
 		return str;
 	}
-}
+} // namespace polyfill
 
 namespace hls
 {

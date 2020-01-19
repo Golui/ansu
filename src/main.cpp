@@ -1,9 +1,10 @@
 #include "ansu.hpp"
-#include <string>
-#include <iostream>
-#include <iomanip>
-#include <fstream>
 #include "tester.hpp"
+
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <string>
 
 String tests[] = {
 	"zeros",
@@ -11,37 +12,32 @@ String tests[] = {
 	"16bytes_r",
 	"24bytes",
 	"37bytes",
-	// "256bytes",
-	// "64kbytes"
+	"hamlet",
+	"macbeth",
+	"thonk",
 };
 
-int main(int argc, char const *argv[])
+int main(int argc, char const* argv[])
 {
 	// std::cout << argc;
 	String location;
-	if(argc == 2)
-	{
-		location = argv[1];
-	}
-
+	if(argc == 2) { location = argv[1]; }
 
 	bool hadErrors = false;
-	for(auto tname : tests)
+	for(auto tname: tests)
 	{
 		Tester t(location, tname);
 		t.setVerbose();
-	#ifdef NO_VIVADO
-		t.generate_vector();
+#ifdef NO_VIVADO
+		t.run(true);
 		hadErrors |= t.run();
-	#else
+#else
 		hadErrors |= t.run();
-	#endif
+#endif
 	}
 
 	if(!hadErrors)
-	{
-		std::cout << "*** ALL TESTS PASSED SUCCESSFULLY ***" << std::endl;
-	}
+	{ std::cout << "*** ALL TESTS PASSED SUCCESSFULLY ***" << std::endl; }
 
 	return hadErrors;
 }

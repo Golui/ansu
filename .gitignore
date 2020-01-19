@@ -4,3 +4,5 @@
 bin
 ansu
 tools/out
+.clang-format
+res/out

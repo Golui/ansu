@@ -2,31 +2,31 @@
 
 #define MASK(b) ((1 << b) - 1)
 
-state_t x = encoding_table[0];
+state_t x		= encoding_table[0];
 state_t partial = 0;
 // *Remaining* bits
-nb_bits_t partial_bits = sizeof(state_t) << 3;
+u8 partial_bits = sizeof(state_t) << 3;
 u32 meta_offset = 0;
 
 void reset_encoding()
 {
-	x = encoding_table[0];
-	partial = 0;
+	x			 = encoding_table[0];
+	partial		 = 0;
 	partial_bits = sizeof(state_t) << 3;
-	meta_offset = 0;
+	meta_offset	 = 0;
 }
 
-void encode_single(
-		message_t current,
-		hls::stream<state_t>& out,
-		hls::stream<ANSMeta>& meta)
+void encode_single(message_t current,
+				   hls::stream<state_t>& out,
+				   hls::stream<ANSMeta>& meta)
 {
-	#pragma HLS pipeline
+#pragma HLS pipeline
 
-	nb_bits_t nb_bits;
+	nb_t nb_bits;
 
 	// Recover number of bits
 	nb_bits = (x + nb[current]) >> (TABLE_SIZE_LOG + 1);
+
 	// Mask the output
 	state_t masked = x & MASK(nb_bits);
 
@@ -38,15 +38,16 @@ void encode_single(
 	{
 		// Write them
 		partial |= masked >> (nb_bits - partial_bits);
-		out << (state_t)partial;
+		out << (state_t) partial;
 		meta_offset++;
 		// Reset state of the partial
 		partial_bits = (sizeof(state_t) << 3) - nb_bits + partial_bits;
-		partial = masked << (partial_bits);
+		partial		 = masked << (partial_bits);
 	} else
 	{
 		// Otherwise, just shift and write to partial
 		partial |= masked << (partial_bits - nb_bits);
+
 		partial_bits -= nb_bits;
 	}
 
@@ -54,23 +55,20 @@ void encode_single(
 	{
 		ANSMeta finished;
 
-		finished.offset = meta_offset;
-		finished.dead_bits = partial_bits;
+		finished.offset		   = meta_offset;
+		finished.dead_bits	   = partial_bits;
 		finished.control_state = x - TABLE_SIZE;
-		finished.partial = partial;
+		finished.partial	   = partial;
 
 		meta << finished;
 		meta_offset = 0;
 	}
-
 }
 
-void encode_stream(
-		hls::stream<message_t>& message,
-		hls::stream<state_t>& out,
-		hls::stream<ANSMeta>& meta,
-		u8& control
-		)
+void encode_stream(hls::stream<message_t>& message,
+				   hls::stream<state_t>& out,
+				   hls::stream<ANSMeta>& meta,
+				   u8& control)
 {
 	PRAGMA_HLS(stream variable = message depth = AVG_MESSAGE_LENGTH)
 
@@ -92,17 +90,14 @@ void encode_stream(
 
 	if(control & CONTROL_FLUSH)
 	{
-		if(partial_bits != sizeof(state_t) << 3)
-		{
-			out << (state_t)partial;
-		}
+		if(partial_bits != sizeof(state_t) << 3) { out << (state_t) partial; }
 
 		ANSMeta finished;
 
-		finished.offset = meta_offset + 1;
-		finished.dead_bits = partial_bits;
+		finished.offset		   = meta_offset + 1;
+		finished.dead_bits	   = partial_bits;
 		finished.control_state = x - TABLE_SIZE;
-		finished.partial = partial;
+		finished.partial	   = partial;
 
 		meta << finished;
 

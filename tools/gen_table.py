@@ -2,6 +2,8 @@ import math
 import copy
 import pystache as ps
 import itertools
+import argparse
+from collections import Counter
 
 # Adapted from https://github.com/JarekDuda/AsymmetricNumeralSystemsToolkit/blob/master/ANStoolkit.cpp
 
@@ -100,7 +102,8 @@ class ANS:
             symbols = sorted(set(message))
 
         out = ""
-        x, _ = self.encode_single(0, symbols.index(message[0]))
+        # x, _ = self.encode_single(0, symbols.index(message[0]))
+        x = self.encoding_table[0]
         for s in message:
             sindex = symbols.index(s)
             x, bits = self.encode_single(x, sindex)
@@ -111,12 +114,12 @@ class ANS:
     def decode(self, encoded, symbols=None):
         x, stream = encoded
         if symbols is None:
-            symbols = range(self.allen)
+            symbols = [str(i) for i in range(self.allen)]
 
-        out = ""
+        out = []
         while len(stream) > 0:
             nb_bits, new_x = self.nb_bits[x], self.new_x[x]
-            out += str(self.states[x])
+            out.append(symbols[self.states[x]])
             x = new_x + int(stream[-nb_bits:], 2)
             stream = stream[:-nb_bits]
         return out[::-1]
@@ -138,12 +141,13 @@ def comma_sep(what):
 
 def cify(ans):
     renderer = ps.Renderer()
-    dt = pick_datatype(2*ans.allen - 1)
     rendered_h = renderer.render_path("template/ans_table.hpp.stache", {
         "ans": ans,
         "message_dt": pick_datatype(ans.allen - 1),
-        "state_dt": dt,
-        "state_delta_dt": dt[1:],
+        "state_dt": pick_datatype(max(ans.encoding_table)),
+        "state_delta_dt": pick_datatype(2 * max(ans.encoding_table) - 1)[1:],
+        "nb_bits_dt": pick_datatype(max(ans.nb_bits)),
+        "nb_dt": pick_datatype(max(ans.nb(x) for x in ans.states)),
         "states": comma_sep(ans.states),
         "new_x": comma_sep(ans.new_x),
         "encoding_table": comma_sep(ans.encoding_table),
@@ -157,24 +161,44 @@ def cify(ans):
         f.write(rendered_h)
 
 
+def process_sample_file(filenm):
+    with open(filenm, 'rb') as f:
+        MESSAGE = f.read()
+        countDict = Counter(MESSAGE)
+        countDict.update({i: 0 for i in range(256)})
+        symbols, occurences = zip(*sorted(countDict.items()))
+        return occurences2prob(*occurences), symbols, MESSAGE
+
+
 def occurences2prob(*args):
     s = sum(args)
     return [x/s for x in args]
 
 
 def main():
-    ans = ANS(occurences2prob(10, 10, 12), table_size_log=5)
-    print(ans.q)
-    print(ans.states)
-    print(ans.encoding_table)
-    print(ans.start)
-    print([ans.nb(s) for s in range(3)])
-    SYMBOLS = ['0', '1', '2']
-    MESSAGE = "1102010120"
-    print(MESSAGE)
-    encoded = ans.encode(MESSAGE, SYMBOLS)
-    print(encoded)
-    print(ans.decode(encoded, SYMBOLS))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file")
+    parser.add_argument("-p", type=int, default=5)
+
+    args = parser.parse_args()
+
+    if "file" in args:
+        occurences, SYMBOLS, MESSAGE = process_sample_file(args.file)
+    else:
+        occurences = occurences2prob(10, 10, 12)
+        SYMBOLS = ['0', '1', '2']
+        MESSAGE = "1102010120"
+
+    ans = ANS(occurences, table_size_log=args.p)
+    # print(ans.q)
+    # print(ans.states)
+    # print(ans.encoding_table)
+    # print(ans.start)
+    # print([ans.nb(s) for s in range(3)])
+    # print(MESSAGE)
+    encoded = ans.encode([ord(i) for i in "aaaaaaaaaaaaaaaa"], SYMBOLS)
+    # print(encoded)
+    # print(*(chr(i) for i in ans.decode(encoded, SYMBOLS)), sep="")
     cify(ans)
 
 

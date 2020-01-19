@@ -1,6 +1,6 @@
 #include "ans_table.hpp"
 
-#define __PRAGMA_SUB(x) _Pragma (#x)
+#define __PRAGMA_SUB(x) _Pragma(#x)
 #define DO_PRAGMA(x) __PRAGMA_SUB(x)
 #define PRAGMA_HLS(x) DO_PRAGMA(HLS x)
 
@@ -8,7 +8,7 @@
  * Specify how often to emit ANSMeta
  * @param state_t size of state
  */
-#define CHECKPOINT 16384/sizeof(state_t)
+#define CHECKPOINT 16384 / sizeof(state_t)
 // #define CHECKPOINT 2/sizeof(state_t)
 
 /**
@@ -17,4 +17,4 @@
  * AVG_MESSAGE_LENGTH symbols; this is due to potential memory issues
  * if the test vector is sufficiently large.
  */
-#define AVG_MESSAGE_LENGTH 8
+#define AVG_MESSAGE_LENGTH 1024

@@ -6,6 +6,7 @@ typedef {{state_dt}} state_t;
 typedef {{state_delta_dt}} state_delta_t;
 typedef state_t encoding_table_t;
 typedef uint8_t nb_bits_t;
+typedef {{message_dt}} message_t
 
 #define TABLE_SIZE_LOG {{ans.tsl}}
 #define TABLE_SIZE {{ans.ts}}

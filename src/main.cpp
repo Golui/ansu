@@ -1,39 +1,47 @@
 #include "ansu.hpp"
-#include <cstdio>
+#include <string>
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+#include "tester.hpp"
 
-int main(int argc, char const *argv[]) {
-	message_t mess[MESSAGE_SIZE] = {0, 0, 2, 2, 1, 0, 1, 1, 0, 0, 0, 1, 2, 1, 0, 0};
+String tests[] = {
+	"zeros",
+	"16bytes",
+	"16bytes_r",
+	"24bytes",
+	"37bytes",
+	// "256bytes",
+	// "64kbytes"
+};
 
-	hls::stream<message_t> message;
-	hls::stream<state_t> out;
-	hls::stream<ANSBlock> meta;
-
-	for(message_t m : mess) message << m;
-
-	setup_encode();
-	encode_stream(message, out, meta);
-	end_encode(out, meta);
-
-	state_t CORRECT[2] = {0x1D, 0x06};
-
-	while(!out.empty())
+int main(int argc, char const *argv[])
+{
+	// std::cout << argc;
+	String location;
+	if(argc == 2)
 	{
-		state_t dt;
-		out >> dt;
-		printf(BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(dt));
-	}
-
-	printf("\n");
-
-	while(!meta.empty())
-	{
-		ANSBlock block;
-		meta >> block;
-		printf("\nBlock OBJ stats:\n");
-		printf(" - final_state: %d\n", block.final_state);
-		printf(" - length: %d\n", block.length);
-		printf(" - dead_bits: %d\n", block.dead_bits);
+		location = argv[1];
 	}
 
 
+	bool hadErrors = false;
+	for(auto tname : tests)
+	{
+		Tester t(location, tname);
+		t.setVerbose();
+	#ifdef NO_VIVADO
+		t.generate_vector();
+		hadErrors |= t.run();
+	#else
+		hadErrors |= t.run();
+	#endif
+	}
+
+	if(!hadErrors)
+	{
+		std::cout << "*** ALL TESTS PASSED SUCCESSFULLY ***" << std::endl;
+	}
+
+	return hadErrors;
 }

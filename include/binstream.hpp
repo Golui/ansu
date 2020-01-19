@@ -11,6 +11,13 @@ namespace polyfill
 		{
 			return backend.empty();
 		}
+
+		T read()
+		{
+			T val;
+			*this >> val;
+			return val;
+		}
 	};
 
 	template <typename T>

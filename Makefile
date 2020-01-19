@@ -6,7 +6,7 @@ BIN := bin
 
 CPP := /usr/local/opt/llvm/bin/clang++
 
-CPP_FLAGS := -MMD -MP -Wall -g -pedantic -std=c++14 -DNO_VIVADO -I$(INCLUDE)
+CPP_FLAGS := -MMD -MP -Wall -g -pedantic -std=c++14 -Wno-unknown-pragmas -DNO_VIVADO -I$(INCLUDE)
 
 CFILES := $(shell find $(SOURCE) -name "*.cpp")
 HFILES := $(shell find $(INCLUDE) -name "*.hpp")

@@ -1,0 +1,7 @@
+
+switch({{control}})
+{
+{{#table}}
+    case {{name}}: {{target}} = {{val}}; break;
+{{/table}}
+}

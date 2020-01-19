@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ints.hpp"
+#include "settings.hpp"
 #include "ans_table.hpp"
 #ifdef NO_VIVADO
 	#include "binstream.hpp"
@@ -8,6 +9,9 @@
 	#include <hls_stream.h>
 #endif
 
+#define CONTROL_RESET_STATE 0b1
+#define CONTROL_ENCODE 0b10
+#define CONTROL_FLUSH 0b100
 
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)  \
@@ -22,26 +26,28 @@
 
 typedef u8 message_t;
 
-// #define BLOCK_SIZE 16384/sizeof(state_t)
-// #define MESSAGE_SIZE 1024*sizeof(message_t)
-
-#define BLOCK_SIZE 2/sizeof(state_t)
-#define MESSAGE_SIZE 16*sizeof(message_t)
-
-
-struct ANSBlock {
-	state_t final_state;
-	u32 length;
+struct ANSMeta {
+	state_t control_state;
+	state_t partial;
+	u32 offset;
 	u32 dead_bits;
-};
 
-void setup_encode();
+	bool operator==(const ANSMeta other)
+	{
+		return this->control_state == other.control_state
+			   && this->partial == other.partial
+			   && this->offset == other.offset
+			   && this->dead_bits == other.dead_bits;
+	}
+
+	bool operator!=(const ANSMeta other)
+	{
+		return !(*this == other);
+	}
+};
 
 void encode_stream(
 		hls::stream<message_t>& message,
 		hls::stream<state_t>& out,
-		hls::stream<ANSBlock>& meta);
-
-void end_encode(
-		hls::stream<state_t>& out,
-		hls::stream<ANSBlock>& meta);
+		hls::stream<ANSMeta>& meta,
+		u8& control);

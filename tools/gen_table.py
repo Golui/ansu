@@ -1,9 +1,13 @@
 import math
 import copy
 import pystache as ps
-import itertools
+import pickle
 import argparse
 from collections import Counter
+import mmap
+import struct
+import tempfile
+import os
 
 # Adapted from https://github.com/JarekDuda/AsymmetricNumeralSystemsToolkit/blob/master/ANStoolkit.cpp
 
@@ -108,7 +112,6 @@ class ANS:
             sindex = symbols.index(s)
             x, bits = self.encode_single(x, sindex)
             out += bits
-        # out += ANS.output(x - self.ts, self.tsl)
         return (x - self.ts, out)
 
     def decode(self, encoded, symbols=None):
@@ -124,12 +127,55 @@ class ANS:
             stream = stream[:-nb_bits]
         return out[::-1]
 
+    def binary_decode(self, data, meta, out_name):
+        types = ["B", "H", "I", "L", None]
+
+        sel = dtsel(max(self.encoding_table))
+        state_t_size = 2 ** sel
+        dt_symbol = types[sel]
+        if dt_symbol is None:
+            print("Invalid ANS object")
+            return
+
+        meta.seek(-(2*state_t_size + 8), 2)
+        x, = struct.unpack(dt_symbol, meta.read(state_t_size))
+
+        meta.seek(-4, 2)
+        dead_bits, = struct.unpack("B", meta.read(1))
+        nb_bits, new_x = self.nb_bits[x], self.new_x[x]
+
+        with tempfile.NamedTemporaryFile() as out:
+            file = mmap.mmap(data.fileno(), 0, prot=mmap.PROT_READ)
+            stream = ""
+            writebuf = None
+            # Loop until "Beginning of file"
+            for i in range(0, file.size(), state_t_size)[::-1]:
+                cur_val, = struct.unpack(dt_symbol, file[i:i + state_t_size])
+                stream = ANS.output(cur_val, state_t_size*8) + stream
+                if dead_bits > 0:
+                    stream = stream[:-dead_bits]
+                    dead_bits = 0
+                while len(stream) >= nb_bits:
+                    if writebuf is not None:
+                        out.write(struct.pack("B", writebuf))
+                    x = new_x + int(stream[-nb_bits:], 2)
+                    writebuf = self.states[x]
+                    stream = stream[:-nb_bits]
+                    nb_bits, new_x = self.nb_bits[x], self.new_x[x]
+            out.flush()
+            os.system(
+                f"< {out.name} xxd -p -c1 | tac | xxd -p -r > {out_name}")
+
+
+def dtsel(val):
+    dtsel = [8, 16, 32, 64, math.inf]
+    datatype = next(i for i, x in enumerate(dtsel) if x > math.log2(val))
+    return datatype
+
 
 def pick_datatype(val):
     datatypes = ["uint8_t", "uint16_t", "uint32_t", "uint64_t", None]
-    dtsel = [8, 16, 32, 64, math.inf]
-    datatype = next(i for i, x in zip(
-        datatypes, dtsel) if x > math.log2(val))
+    datatype = datatypes[dtsel(val)]
     if datatype is None:
         print("Too large number")
     return datatype
@@ -139,12 +185,13 @@ def comma_sep(what):
     return ", ".join(str(x) for x in what)
 
 
-def cify(ans):
+def cify(ans, out):
     renderer = ps.Renderer()
     rendered_h = renderer.render_path("template/ans_table.hpp.stache", {
         "ans": ans,
         "message_dt": pick_datatype(ans.allen - 1),
         "state_dt": pick_datatype(max(ans.encoding_table)),
+        # Evil hack to get signed type
         "state_delta_dt": pick_datatype(2 * max(ans.encoding_table) - 1)[1:],
         "nb_bits_dt": pick_datatype(max(ans.nb_bits)),
         "nb_dt": pick_datatype(max(ans.nb(x) for x in ans.states)),
@@ -157,7 +204,7 @@ def cify(ans):
         "adj_start": comma_sep(ans.adj_start)
     })
 
-    with open("out/ans_table.hpp", "w") as f:
+    with open(out, "w") as f:
         f.write(rendered_h)
 
 
@@ -175,31 +222,77 @@ def occurences2prob(*args):
     return [x/s for x in args]
 
 
+def generate_c(args):
+    if args.file is None:
+        if args.d is None:
+            print("Specify either a file or the -d option.")
+            return
+        with open(args.d, "rb") as f:
+            ans = pickle.load(f)
+    else:
+        occurences, SYMBOLS, MESSAGE = process_sample_file(args.file)
+        ans = ANS(occurences, table_size_log=args.p)
+
+    if args.o is not None:
+        cify(ans, args.o)
+    else:
+        if args.d is None:
+            print("Warning: both -o and -d are not specified, nothing will"
+                  " be saved!")
+
+    if args.d is not None:
+        with open(args.d, "wb") as f:
+            pickle.dump(ans, f)
+        print(f"Dumped ans to {args.d}")
+
+
+def decode_file(args):
+    with open(args.ans, "rb") as f:
+        ans = pickle.load(f)
+        with open(args.data, "rb") as d, open(args.meta, "rb") as m:
+            ans.binary_decode(d, m, args.out)
+
+
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("file")
-    parser.add_argument("-p", type=int, default=5)
+    parser = argparse.ArgumentParser(description="ANS helper script.")
+    subp = parser.add_subparsers(title="Available subcommands:")
+
+    generate = subp.add_parser(
+        "generate",
+        help="Generate a C header"
+        " with ANS tables, based on a sample file.")
+
+    generate.set_defaults(func=generate_c)
+    generate.add_argument("file", help="The sample file to use."
+                          " The occurence of each byte will be tallied."
+                          " Based on these, the ANS table will be created."
+                          " One can also not specify this argument, and use"
+                          " a preexisting ANS object. See -d for details.",
+                          nargs='?', default=None)
+
+    generate.add_argument(
+        "-o", help="Where to output the C header to.")
+    generate.add_argument("-d", help="ANS object file name. Save/Load.")
+
+    generate.add_argument("-p", type=int, default=8,
+                          help="Log2 of the target table size. Default 8.")
+
+    decompress = subp.add_parser(
+        "decompress",
+        help="Decompress an ANSU compressed file.")
+
+    decompress.set_defaults(func=decode_file)
+    decompress.add_argument(
+        "ans", help="The ANS decompressor object to use")
+    decompress.add_argument("data", help="The data file to decompress")
+    decompress.add_argument(
+        "meta", help="The accompanying meta file to decompress")
+
+    decompress.add_argument(
+        "out", help="Where to save the decompressed data")
 
     args = parser.parse_args()
-
-    if "file" in args:
-        occurences, SYMBOLS, MESSAGE = process_sample_file(args.file)
-    else:
-        occurences = occurences2prob(10, 10, 12)
-        SYMBOLS = ['0', '1', '2']
-        MESSAGE = "1102010120"
-
-    ans = ANS(occurences, table_size_log=args.p)
-    # print(ans.q)
-    # print(ans.states)
-    # print(ans.encoding_table)
-    # print(ans.start)
-    # print([ans.nb(s) for s in range(3)])
-    # print(MESSAGE)
-    encoded = ans.encode([ord(i) for i in "aaaaaaaaaaaaaaaa"], SYMBOLS)
-    # print(encoded)
-    # print(*(chr(i) for i in ans.decode(encoded, SYMBOLS)), sep="")
-    cify(ans)
+    args.func(args)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,7 @@
 #include "ints.hpp"
 
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <string>
 
@@ -120,7 +121,7 @@ public:
 
 				if(!generate && cur != compare) { hadErrors = true; }
 			}
-			std::cout << std::endl;
+			if(this->isVerbose) std::cout << std::endl;
 		};
 
 		auto testMeta = [&]() {
@@ -167,7 +168,7 @@ public:
 
 				if(!generate && cur != cmp) { hadErrors = true; }
 			}
-			std::cout << std::endl;
+			if(this->isVerbose) std::cout << std::endl;
 		};
 
 		if(!generate)
@@ -206,7 +207,7 @@ public:
 				}
 			}
 
-			std::cout << std::endl;
+			if(this->isVerbose) std::cout << std::endl;
 
 			encode_stream(message, encout, encmeta, control);
 

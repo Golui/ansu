@@ -2,8 +2,6 @@
 #include "tester.hpp"
 
 #include <fstream>
-#include <iomanip>
-#include <iostream>
 #include <string>
 
 String tests[] = {
@@ -19,7 +17,6 @@ String tests[] = {
 
 int main(int argc, char const* argv[])
 {
-	// std::cout << argc;
 	String location;
 	if(argc == 2) { location = argv[1]; }
 

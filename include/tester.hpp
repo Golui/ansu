@@ -181,6 +181,7 @@ public:
 
 		u8 control = CONTROL_RESET_STATE | CONTROL_ENCODE;
 
+		u32 dropBytes	 = 0;
 		int blockCounter = 0;
 		while(!in.eof())
 		{
@@ -191,7 +192,8 @@ public:
 				std::cout << std::hex;
 				blockCounter++;
 			}
-			for(int i = 0; i < AVG_MESSAGE_LENGTH && in; i++)
+			int i = 0;
+			for(; i < AVG_MESSAGE_LENGTH && in; i++)
 			{
 				message_t cur;
 				readFile(in, cur);
@@ -209,7 +211,10 @@ public:
 
 			if(this->isVerbose) std::cout << std::endl;
 
-			encode_stream(message, encout, encmeta, control);
+			dropBytes = (AVG_MESSAGE_LENGTH - i) * sizeof(message_t);
+			for(; i < AVG_MESSAGE_LENGTH; i++) message << (message_t) 0;
+
+			encode_stream(message, encout, encmeta, 0, control);
 
 			testOut();
 			testMeta();
@@ -217,11 +222,15 @@ public:
 			in.peek();
 		}
 
-		control |= CONTROL_FLUSH;
-		encode_stream(message, encout, encmeta, control);
+		control = CONTROL_FLUSH;
+		encode_stream(message, encout, encmeta, dropBytes, control);
 
 		testOut();
 		testMeta();
+
+		if(!message.empty()) { std::cerr << "MESSAGE WAS NOT ALL CONSUMED\n"; }
+		if(!encout.empty()) { std::cerr << "ENCOUT WAS NOT ALL CONSUMED\n"; }
+		if(!encmeta.empty()) { std::cerr << "ENCMETA WAS NOT ALL CONSUMED\n"; }
 
 		if(!generate)
 		{

@@ -5,13 +5,12 @@
 #include <string>
 
 String tests[] = {
-	"zeros",
-	"16bytes",
-	"16bytes_r",
-	"24bytes",
-	"37bytes",
-	"hamlet",
-	"macbeth",
+	// "zeros", "16bytes",
+	// "16bytes_r",
+	// "24bytes",
+	// "37bytes",
+	// "hamlet",
+	// "macbeth",
 	"thonk",
 };
 
@@ -26,7 +25,7 @@ int main(int argc, char const* argv[])
 		Tester t(location, tname);
 		t.setVerbose();
 #ifdef NO_VIVADO
-		t.run(true);
+		// t.run(true);
 		hadErrors |= t.run();
 #else
 		hadErrors |= t.run();

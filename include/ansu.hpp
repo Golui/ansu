@@ -25,13 +25,15 @@ struct ANSMeta
 	state_t control_state;
 	state_t partial;
 	u32 offset;
-	u8 dead_bits;
+	u32 dead_bits;
+	u32 dead_bytes;
 
 	bool operator==(const ANSMeta other)
 	{
 		return this->control_state == other.control_state
 			   && this->partial == other.partial && this->offset == other.offset
-			   && this->dead_bits == other.dead_bits;
+			   && this->dead_bits == other.dead_bits
+			   && this->dead_bytes == this->dead_bytes;
 	}
 
 	bool operator!=(const ANSMeta other) { return !(*this == other); }
@@ -40,4 +42,5 @@ struct ANSMeta
 void encode_stream(hls::stream<message_t>& message,
 				   hls::stream<state_t>& out,
 				   hls::stream<ANSMeta>& meta,
+				   u32 dropBytes,
 				   u8& control);

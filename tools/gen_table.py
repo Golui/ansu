@@ -1,7 +1,7 @@
 import math
 import copy
 import pystache as ps
-import pickle
+import dill as pickle
 import argparse
 from collections import Counter
 import mmap
@@ -106,8 +106,8 @@ class ANS:
             symbols = sorted(set(message))
 
         out = ""
-        # x, _ = self.encode_single(0, symbols.index(message[0]))
-        x = self.encoding_table[0]
+        x, _ = self.encode_single(0, symbols.index(message[0]))
+        # x = self.encoding_table[0]
         for s in message:
             sindex = symbols.index(s)
             x, bits = self.encode_single(x, sindex)
@@ -137,11 +137,15 @@ class ANS:
             print("Invalid ANS object")
             return
 
-        meta.seek(-(2*state_t_size + 8), 2)
+        meta.seek(-(2*state_t_size + 12), 2)
         x, = struct.unpack(dt_symbol, meta.read(state_t_size))
 
-        meta.seek(-4, 2)
+        meta.seek(-8, 2)
         dead_bits, = struct.unpack("B", meta.read(1))
+        meta.seek(-4, 2)
+        dropBytes, = struct.unpack("I", meta.read(4))
+        dropBytes += 1
+
         nb_bits, new_x = self.nb_bits[x], self.new_x[x]
 
         with tempfile.NamedTemporaryFile() as out:
@@ -156,10 +160,14 @@ class ANS:
                     stream = stream[:-dead_bits]
                     dead_bits = 0
                 while len(stream) >= nb_bits:
-                    if writebuf is not None:
-                        out.write(struct.pack("B", writebuf))
+                    if dropBytes > 0:
+                        dropBytes -= 1
+                    else:
+                        if writebuf is not None:
+                            out.write(struct.pack("B", writebuf))
                     x = new_x + int(stream[-nb_bits:], 2)
-                    writebuf = self.states[x]
+                    if dropBytes == 0:
+                        writebuf = self.states[x]
                     stream = stream[:-nb_bits]
                     nb_bits, new_x = self.nb_bits[x], self.new_x[x]
             out.flush()
@@ -186,8 +194,11 @@ def comma_sep(what):
 
 
 def cify(ans, out):
+    dn = os.path.dirname(__file__)
+    templn = os.path.join(dn, "template/ans_table.hpp.stache")
+
     renderer = ps.Renderer()
-    rendered_h = renderer.render_path("template/ans_table.hpp.stache", {
+    rendered_h = renderer.render_path(templn, {
         "ans": ans,
         "message_dt": pick_datatype(ans.allen - 1),
         "state_dt": pick_datatype(max(ans.encoding_table)),

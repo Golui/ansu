@@ -7,3 +7,4 @@ tools/out
 .clang-format
 res/out
 res/golden
+__pycache__

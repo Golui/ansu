@@ -17,4 +17,4 @@
  * AVG_MESSAGE_LENGTH symbols; this is due to potential memory issues
  * if the test vector is sufficiently large.
  */
-#define AVG_MESSAGE_LENGTH 1024
+#define AVG_MESSAGE_LENGTH 128

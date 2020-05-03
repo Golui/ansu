@@ -5,7 +5,7 @@
 #define PRAGMA_HLS(x) DO_PRAGMA(HLS x)
 
 /**
- * Specify how often to emit ANSMeta
+ * Specify how often to emit ANS::$1
  * @param state_t size of state
  */
 #define CHECKPOINT 16384 / sizeof(state_t)
@@ -18,3 +18,8 @@
  * if the test vector is sufficiently large.
  */
 #define AVG_MESSAGE_LENGTH 128
+
+/**
+ * Specify the number of encoding channels, i.e. encoders working in parallel.
+ */
+#define CHANNEL_COUNT 1

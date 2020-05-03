@@ -5,13 +5,13 @@
 #include <string>
 
 String tests[] = {
-	// "zeros", "16bytes",
+	"zeros", "16bytes",
 	// "16bytes_r",
 	// "24bytes",
 	// "37bytes",
 	// "hamlet",
 	// "macbeth",
-	"thonk",
+	// "thonk",
 };
 
 int main(int argc, char const* argv[])

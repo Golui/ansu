@@ -12,8 +12,14 @@ namespace ANS::Compress
 	{
 		s.x			   = encoding_table[0];
 		s.partial	   = 0;
-		s.partial_bits = sizeof(state_t) << 3;
+		s.partial_bits = 0;
 		s.meta_offset  = 0;
+	}
+
+	void reset_encoding_master(ANS::State& s)
+	{
+		reset_encoding(s);
+		s.partial_bits = ANS::all_bits_remaining;
 	}
 
 	void encode_single(ANS::State& s, message_t current)
@@ -27,25 +33,9 @@ namespace ANS::Compress
 		// Mask the output
 		s.partial	   = s.x & MASK(nb_bits);
 		s.partial_bits = nb_bits;
+
 		// Get next state
 		s.x = encoding_table[start[current] + (s.x >> nb_bits)];
-	}
-
-	void encode_single_meta(ANS::State& s, hls::stream<ANS::Meta>& meta)
-	{
-		if(s.meta_offset == CHECKPOINT - 1)
-		{
-			ANS::Meta finished;
-
-			finished.offset		   = s.meta_offset;
-			finished.dead_bits	   = s.partial_bits;
-			finished.control_state = s.x - TABLE_SIZE;
-			finished.partial	   = s.partial;
-			finished.dead_bytes	   = 0;
-
-			meta << finished;
-			s.meta_offset = 0;
-		}
 	}
 
 	void merge_channels(hls::stream<state_t>& out, hls::stream<ANS::Meta>& meta)
@@ -61,7 +51,7 @@ namespace ANS::Compress
 				out << (state_t) master.partial;
 				s.meta_offset++;
 				// Reset state of the partial
-				master.partial_bits = (sizeof(state_t) << 3) - s.partial_bits
+				master.partial_bits = ANS::all_bits_remaining - s.partial_bits
 									  + master.partial_bits;
 				master.partial = s.partial << (master.partial_bits);
 			} else
@@ -79,7 +69,7 @@ namespace ANS::Compress
 void ANS::compress(hls::stream<message_t>& message,
 				   hls::stream<state_t>& out,
 				   hls::stream<ANS::Meta>& meta,
-				   u32 dropBytes,
+				   u32 padding,
 				   u8& control)
 {
 	using namespace ANS::Compress;
@@ -89,7 +79,7 @@ void ANS::compress(hls::stream<message_t>& message,
 	if(control & CONTROL_RESET_STATE)
 	{
 		for(int i = 0; i < CHANNEL_COUNT; i++) { reset_encoding(encoders[i]); }
-		reset_encoding(master);
+		reset_encoding_master(master);
 		control ^= CONTROL_RESET_STATE;
 	}
 
@@ -108,17 +98,18 @@ void ANS::compress(hls::stream<message_t>& message,
 
 	if(control & CONTROL_FLUSH)
 	{
-		ANS::State& a = master;
-		if(a.partial_bits != sizeof(state_t) << 3)
-		{ out << (state_t) a.partial; }
+		out << (state_t) master.partial;
 
 		ANS::Meta finished;
 
-		finished.offset		   = a.meta_offset + 1;
-		finished.dead_bits	   = a.partial_bits;
-		finished.control_state = a.x - TABLE_SIZE;
-		finished.partial	   = a.partial;
-		finished.dead_bytes	   = dropBytes;
+		finished.offset		 = master.meta_offset + 1;
+		finished.dead_bits	 = master.partial_bits;
+		finished.message_pad = padding;
+		for(int i = 0; i < CHANNEL_COUNT; i++)
+			finished.control_state[i] = encoders[i].x - TABLE_SIZE;
+
+		finished.channels		 = CHANNEL_COUNT;
+		finished.current_channel = CHANNEL_COUNT - 1;
 
 		meta << finished;
 

@@ -5,7 +5,7 @@
 #define PRAGMA_HLS(x) DO_PRAGMA(HLS x)
 
 /**
- * Specify how often to emit ANS::$1
+ * Specify how often to emit ANS::Meta
  * @param state_t size of state
  */
 #define CHECKPOINT 16384 / sizeof(state_t)
@@ -15,11 +15,12 @@
  * Specify the "average message length"; this is used excusively for tests.
  * encode_stream will be called every time the FIFO fills up with
  * AVG_MESSAGE_LENGTH symbols; this is due to potential memory issues
- * if the test vector is sufficiently large.
+ * if the test vector is sufficiently large. Needs to be divisible by
+ * CHANNEL_COUNT.
  */
 #define AVG_MESSAGE_LENGTH 128
 
 /**
  * Specify the number of encoding channels, i.e. encoders working in parallel.
  */
-#define CHANNEL_COUNT 1
+#define CHANNEL_COUNT 4

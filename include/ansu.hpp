@@ -22,6 +22,8 @@
 
 namespace ANS
 {
+	constexpr u8 all_bits_remaining = (sizeof(state_t) << 3);
+
 	struct State
 	{
 		state_t x		= 0;
@@ -32,19 +34,20 @@ namespace ANS
 
 	struct Meta
 	{
-		state_t control_state;
-		state_t partial;
+		u32 channels;
+		u32 current_channel;
+		u32 message_pad;
+		state_t control_state[CHANNEL_COUNT];
 		u32 offset;
 		u32 dead_bits;
-		u32 dead_bytes;
 
+		// TODO Currenly broken
 		bool operator==(const Meta other)
 		{
-			return this->control_state == other.control_state
-				   && this->partial == other.partial
+			return this->message_pad == other.message_pad
+				   && this->control_state == other.control_state
 				   && this->offset == other.offset
-				   && this->dead_bits == other.dead_bits
-				   && this->dead_bytes == this->dead_bytes;
+				   && this->dead_bits == other.dead_bits;
 		}
 
 		bool operator!=(const Meta other) { return !(*this == other); }

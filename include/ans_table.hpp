@@ -13,7 +13,7 @@ typedef uint8_t message_t;
 #define TABLE_SIZE 1024
 #define ALPHABET_LENGTH 256
 
-const state_t states[TABLE_SIZE] = {
+const message_t states[TABLE_SIZE] = {
 	0,	 21,  32,  32,	46,	 73,  97,  99,	101, 101, 103, 104, 105, 109, 110,
 	111, 114, 115, 116, 116, 119, 135, 178, 221, 8,	  29,  32,	39,	 48,  80,
 	97,	 99,  101, 101, 103, 104, 107, 109, 110, 111, 114, 115, 116, 116, 119,

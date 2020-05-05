@@ -5,6 +5,9 @@ bin
 ansu
 tools/out
 .clang-format
-res/out
+res/compressed
+res/decompressed
 res/golden
 __pycache__
+compile_commands.json
+/.clangd

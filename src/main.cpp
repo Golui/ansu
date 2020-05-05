@@ -4,14 +4,17 @@
 #include <fstream>
 #include <string>
 
-String tests[] = {
-	"zeros", "16bytes",
-	// "16bytes_r",
-	// "24bytes",
-	// "37bytes",
-	// "hamlet",
-	// "macbeth",
-	// "thonk",
+std::vector<String> tests = {
+	"zeros",
+	"4bytes",
+	"16bytes",
+	"16bytes_r",
+	"24bytes",
+	"37bytes",
+	"hamlet",
+	"macbeth",
+	"thonk",
+	"fox",
 };
 
 int main(int argc, char const* argv[])
@@ -20,17 +23,9 @@ int main(int argc, char const* argv[])
 	if(argc == 2) { location = argv[1]; }
 
 	bool hadErrors = false;
-	for(auto tname: tests)
-	{
-		Tester t(location, tname);
-		t.setVerbose();
-#ifdef NO_VIVADO
-		// t.run(true);
-		hadErrors |= t.run();
-#else
-		hadErrors |= t.run();
-#endif
-	}
+
+	hadErrors |= ANS::Test::runCompressionTests(location, tests);
+	hadErrors |= ANS::Test::runDecompressionTests(location, tests);
 
 	if(!hadErrors)
 	{ std::cout << "*** ALL TESTS PASSED SUCCESSFULLY ***" << std::endl; }

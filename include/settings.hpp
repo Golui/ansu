@@ -18,9 +18,9 @@
  * if the test vector is sufficiently large. Needs to be divisible by
  * CHANNEL_COUNT.
  */
-#define AVG_MESSAGE_LENGTH 128
+#define AVG_MESSAGE_LENGTH 256
 
 /**
  * Specify the number of encoding channels, i.e. encoders working in parallel.
  */
-#define CHANNEL_COUNT 4
+#define CHANNEL_COUNT 2

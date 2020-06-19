@@ -5,12 +5,15 @@
 
 #define MASK(b) ((1 << b) - 1)
 
-namespace ANS::Decompress
+namespace ANS
 {
-	ANS::State decoders[CHANNEL_COUNT];
+	namespace Decompress
+	{
+		ANS::State decoders[CHANNEL_COUNT];
 
-	ANS::Meta master;
-} // namespace ANS::Decompress
+		ANS::Meta master;
+	} // namespace Decompress
+} // namespace ANS
 
 using namespace ANS::Decompress;
 

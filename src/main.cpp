@@ -25,7 +25,9 @@ int main(int argc, char const* argv[])
 	bool hadErrors = false;
 
 	hadErrors |= ANS::Test::runCompressionTests(location, tests);
+#ifdef NO_VIVADO
 	hadErrors |= ANS::Test::runDecompressionTests(location, tests);
+#endif
 
 	if(!hadErrors)
 	{ std::cout << "*** ALL TESTS PASSED SUCCESSFULLY ***" << std::endl; }

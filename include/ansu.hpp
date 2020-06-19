@@ -9,9 +9,9 @@
 #	include <hls_stream.h>
 #endif
 
-#define CONTROL_RESET_STATE 0b1
-#define CONTROL_ENCODE 0b10
-#define CONTROL_FLUSH 0b100
+#define CONTROL_RESET_STATE 1
+#define CONTROL_ENCODE 2
+#define CONTROL_FLUSH 4
 
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)                                  \
@@ -22,7 +22,7 @@
 
 namespace ANS
 {
-	constexpr u8 all_bits_remaining = (sizeof(state_t) << 3);
+	constexpr static const u8 all_bits_remaining = (sizeof(state_t) << 3);
 
 	struct State
 	{
@@ -41,9 +41,15 @@ namespace ANS
 		u32 offset;
 		u32 dead_bits;
 
-		// TODO Currenly broken
+		// TODO Currenly seems broken
 		bool operator==(const Meta other)
 		{
+			if(this->channels != other.channels) return false;
+			for(int i = 0; i < this->channels; i++)
+			{
+				if(this->control_state[i] != other.control_state[i])
+					return false;
+			}
 			return this->message_pad == other.message_pad
 				   && this->control_state == other.control_state
 				   && this->offset == other.offset
@@ -63,3 +69,11 @@ namespace ANS
 					hls::stream<Meta>& meta,
 					hls::stream<message_t>& message);
 } // namespace ANS
+
+#ifndef NO_VIVADO
+void hls_compress(hls::stream<message_t>& message,
+				  hls::stream<state_t>& out,
+				  hls::stream<ANS::Meta>& meta,
+				  u32 dropBytes,
+				  u8& control);
+#endif

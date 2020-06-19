@@ -2,69 +2,77 @@
 
 #define MASK(b) ((1 << b) - 1)
 
-namespace ANS::Compress
+namespace ANS
 {
-	ANS::State encoders[CHANNEL_COUNT];
-
-	ANS::State master;
-
-	void reset_encoding(ANS::State& s)
+	namespace Compress
 	{
-		s.x			   = encoding_table[0];
-		s.partial	   = 0;
-		s.partial_bits = 0;
-		s.meta_offset  = 0;
-	}
+		ANS::State encoders[CHANNEL_COUNT];
 
-	void reset_encoding_master(ANS::State& s)
-	{
-		reset_encoding(s);
-		s.partial_bits = ANS::all_bits_remaining;
-	}
+		ANS::State master;
 
-	void encode_single(ANS::State& s, message_t current)
-	{
+		void reset_encoding(ANS::State& s)
+		{
+			s.x			   = encoding_table[0];
+			s.partial	   = 0;
+			s.partial_bits = 0;
+			s.meta_offset  = 0;
+		}
+
+		void reset_encoding_master(ANS::State& s)
+		{
+			reset_encoding(s);
+			s.partial_bits = ANS::all_bits_remaining;
+		}
+
+		void encode_single(ANS::State& s, message_t current)
+		{
 #pragma HLS pipeline
 
-		nb_t nb_bits;
-		// Recover number of bits
-		nb_bits = (s.x + nb[current]) >> (TABLE_SIZE_LOG + 1);
+			nb_t nb_bits;
+			// Recover number of bits
+			nb_bits = (s.x + nb[current]) >> (TABLE_SIZE_LOG + 1);
 
-		// Mask the output
-		s.partial	   = s.x & MASK(nb_bits);
-		s.partial_bits = nb_bits;
+			// Mask the output
+			s.partial	   = s.x & MASK(nb_bits);
+			s.partial_bits = nb_bits;
 
-		// Get next state
-		s.x = encoding_table[start[current] + (s.x >> nb_bits)];
-	}
+			// Get next state
+			s.x = encoding_table[start[current] + (s.x >> nb_bits)];
+		}
 
-	void merge_channels(hls::stream<state_t>& out, hls::stream<ANS::Meta>& meta)
-	{
-		for(int j = 0; j < CHANNEL_COUNT; j++)
+		void merge_channels(hls::stream<state_t>& out,
+							hls::stream<ANS::Meta>& meta)
 		{
-			ANS::State& s = encoders[j];
-			if(s.partial_bits > master.partial_bits)
+			PRAGMA_HLS(inline)
+			for(int j = 0; j < CHANNEL_COUNT; j++)
 			{
-				// Write them
-				master.partial |=
-					s.partial >> (s.partial_bits - master.partial_bits);
-				out << (state_t) master.partial;
-				s.meta_offset++;
-				// Reset state of the partial
-				master.partial_bits = ANS::all_bits_remaining - s.partial_bits
-									  + master.partial_bits;
-				master.partial = s.partial << (master.partial_bits);
-			} else
-			{
-				// Otherwise, just shift and write to partial
-				master.partial |= s.partial
-								  << (master.partial_bits - s.partial_bits);
+				PRAGMA_HLS(unroll)
+				ANS::State& s = encoders[j];
+				if(s.partial_bits > master.partial_bits)
+				{
+					// Write them
+					master.partial |=
+						s.partial >> (s.partial_bits - master.partial_bits);
+					out << (state_t) master.partial;
+					s.meta_offset++;
+					// Reset state of the partial
+					master.partial_bits = ANS::all_bits_remaining
+										  - s.partial_bits
+										  + master.partial_bits;
+					master.partial = s.partial << (master.partial_bits);
+				} else
+				{
+					// Otherwise, just shift and write to partial
+					master.partial |= s.partial
+									  << (master.partial_bits - s.partial_bits);
 
-				master.partial_bits -= s.partial_bits;
+					master.partial_bits -= s.partial_bits;
+				}
 			}
 		}
-	}
-} // namespace ANS::Compress
+
+	} // namespace Compress
+} // namespace ANS
 
 void ANS::compress(hls::stream<message_t>& message,
 				   hls::stream<state_t>& out,
@@ -87,10 +95,12 @@ void ANS::compress(hls::stream<message_t>& message,
 	{
 		for(int i = 0; i < AVG_MESSAGE_LENGTH / CHANNEL_COUNT; i++)
 		{
-			message_t buf[CHANNEL_COUNT];
-			for(int j = 0; j < CHANNEL_COUNT; j++) message >> buf[j];
+			PRAGMA_HLS(pipeline ii = CHANNEL_COUNT)
 			for(int j = 0; j < CHANNEL_COUNT; j++)
-				encode_single(encoders[j], buf[j]);
+			{
+				PRAGMA_HLS(unroll)
+				encode_single(encoders[j], message.read());
+			}
 			merge_channels(out, meta);
 		}
 		control ^= CONTROL_ENCODE;
@@ -115,4 +125,14 @@ void ANS::compress(hls::stream<message_t>& message,
 
 		control ^= CONTROL_FLUSH;
 	}
+}
+
+void hls_compress(hls::stream<message_t>& message,
+				  hls::stream<state_t>& out,
+				  hls::stream<ANS::Meta>& meta,
+				  u32 padding,
+				  u8& control)
+{
+	PRAGMA_HLS(inline)
+	ANS::compress(message, out, meta, padding, control);
 }

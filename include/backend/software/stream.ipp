@@ -1,3 +1,5 @@
+#pragma once
+
 #include <queue>
 
 namespace polyfill
@@ -33,8 +35,11 @@ namespace polyfill
 	}
 } // namespace polyfill
 
-namespace hls
+namespace ANS
 {
-	template <typename T>
-	using stream = polyfill::binstream<T>;
-}
+	namespace backend
+	{
+		template <typename T>
+		using stream = polyfill::binstream<T>;
+	}
+} // namespace ANS

@@ -84,9 +84,9 @@ namespace ANS
 					return 1;
 				}
 
-				hls::stream<message_t> message;
-				hls::stream<state_t> encout;
-				hls::stream<ANS::Meta> encmeta;
+				backend::stream<message_t> message;
+				backend::stream<state_t> encout;
+				backend::stream<ANS::Meta> encmeta;
 
 				bool hadErrors = false, outOfBoundsRead = false;
 
@@ -366,9 +366,9 @@ namespace ANS
 					return 1;
 				}
 
-				hls::stream<state_t> compressed;
-				hls::stream<ANS::Meta> encmeta;
-				hls::stream<message_t> message;
+				backend::stream<state_t> compressed;
+				backend::stream<ANS::Meta> encmeta;
+				backend::stream<message_t> message;
 
 				bool hadErrors = false, outOfBoundsRead = false;
 

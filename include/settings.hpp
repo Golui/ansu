@@ -1,4 +1,4 @@
-#include "ans_table.hpp"
+#include "data/ans_table.hpp"
 
 #define __PRAGMA_SUB(x) _Pragma(#x)
 #define DO_PRAGMA(x) __PRAGMA_SUB(x)

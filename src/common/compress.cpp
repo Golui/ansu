@@ -40,8 +40,8 @@ namespace ANS
 			s.x = encoding_table[start[current] + (s.x >> nb_bits)];
 		}
 
-		void merge_channels(hls::stream<state_t>& out,
-							hls::stream<ANS::Meta>& meta)
+		void merge_channels(backend::stream<state_t>& out,
+							backend::stream<ANS::Meta>& meta)
 		{
 			PRAGMA_HLS(inline)
 			for(int j = 0; j < CHANNEL_COUNT; j++)
@@ -74,9 +74,9 @@ namespace ANS
 	} // namespace Compress
 } // namespace ANS
 
-void ANS::compress(hls::stream<message_t>& message,
-				   hls::stream<state_t>& out,
-				   hls::stream<ANS::Meta>& meta,
+void ANS::compress(backend::stream<message_t>& message,
+				   backend::stream<state_t>& out,
+				   backend::stream<ANS::Meta>& meta,
 				   u32 padding,
 				   u8& control)
 {
@@ -125,14 +125,4 @@ void ANS::compress(hls::stream<message_t>& message,
 
 		control ^= CONTROL_FLUSH;
 	}
-}
-
-void hls_compress(hls::stream<message_t>& message,
-				  hls::stream<state_t>& out,
-				  hls::stream<ANS::Meta>& meta,
-				  u32 padding,
-				  u8& control)
-{
-	PRAGMA_HLS(inline)
-	ANS::compress(message, out, meta, padding, control);
 }

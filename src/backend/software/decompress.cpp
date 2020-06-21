@@ -17,7 +17,7 @@ namespace ANS
 
 using namespace ANS::Decompress;
 
-void init_decoders(hls::stream<ANS::Meta>& meta)
+void init_decoders(ANS::backend::stream<ANS::Meta>& meta)
 {
 	master = meta.read();
 
@@ -51,9 +51,9 @@ void shift(state_t& newd, state_t& d, u8& available, u8& shift_amount)
 	redistribute(newd, d, available, ANS::all_bits_remaining - shift_amount);
 }
 
-void ANS::decompress(hls::stream<state_t>& out,
-					 hls::stream<Meta>& meta,
-					 hls::stream<message_t>& message)
+void ANS::decompress(backend::stream<state_t>& out,
+					 backend::stream<Meta>& meta,
+					 backend::stream<message_t>& message)
 {
 	init_decoders(meta);
 	int cur_channel	  = master.current_channel;

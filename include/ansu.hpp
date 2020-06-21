@@ -1,13 +1,10 @@
 #pragma once
 
-#include "ans_table.hpp"
+#include "backend/backend.hpp"
+#include "backend/stream.hpp"
+#include "data/ans_table.hpp"
 #include "ints.hpp"
 #include "settings.hpp"
-#ifdef NO_VIVADO
-#	include "binstream.hpp"
-#else
-#	include <hls_stream.h>
-#endif
 
 #define CONTROL_RESET_STATE 1
 #define CONTROL_ENCODE 2
@@ -59,21 +56,13 @@ namespace ANS
 		bool operator!=(const Meta other) { return !(*this == other); }
 	};
 
-	void compress(hls::stream<message_t>& message,
-				  hls::stream<state_t>& out,
-				  hls::stream<Meta>& meta,
+	void compress(backend::stream<message_t>& message,
+				  backend::stream<state_t>& out,
+				  backend::stream<Meta>& meta,
 				  u32 dropBytes,
 				  u8& control);
 
-	void decompress(hls::stream<state_t>& out,
-					hls::stream<Meta>& meta,
-					hls::stream<message_t>& message);
+	void decompress(backend::stream<state_t>& out,
+					backend::stream<Meta>& meta,
+					backend::stream<message_t>& message);
 } // namespace ANS
-
-#ifndef NO_VIVADO
-void hls_compress(hls::stream<message_t>& message,
-				  hls::stream<state_t>& out,
-				  hls::stream<ANS::Meta>& meta,
-				  u32 dropBytes,
-				  u8& control);
-#endif

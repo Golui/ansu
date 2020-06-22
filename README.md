@@ -15,7 +15,7 @@ Currently, ansu compressed files are tarballs containing a primitive header file
 ### Installation:
 
 ```sh
-    make
+make
 ```
 
 ### Usage:

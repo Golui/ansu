@@ -1,15 +1,11 @@
-#include "data/ans_table.hpp"
-
 #define __PRAGMA_SUB(x) _Pragma(#x)
 #define DO_PRAGMA(x) __PRAGMA_SUB(x)
 #define PRAGMA_HLS(x) DO_PRAGMA(HLS x)
 
 /**
- * Specify how often to emit ANS::Meta
- * @param state_t size of state
+ * Specify the number of encoding channels, i.e. encoders working in parallel.
  */
-#define CHECKPOINT 16384 / sizeof(state_t)
-// #define CHECKPOINT 2/sizeof(state_t)
+#define CHANNEL_COUNT 2
 
 /**
  * Specify the "average message length"; this is used excusively for tests.
@@ -21,6 +17,19 @@
 #define AVG_MESSAGE_LENGTH 256
 
 /**
- * Specify the number of encoding channels, i.e. encoders working in parallel.
+ * Specify how often to emit ANS::Meta
+ * @param state_t size of state
  */
-#define CHANNEL_COUNT 2
+#define MESSAGES_PER_BLOCK 256
+
+/**
+ * Number of messages to emit an ANS::Meta after.
+ */
+#define CHECKPOINT 64
+
+/**
+ *  Convenience
+ */
+#define DATA_BLOCK_SIZE (AVG_MESSAGE_LENGTH * MESSAGES_PER_BLOCK)
+
+#define META_BLOCK_SIZE (CHANNEL_COUNT * MESSAGES_PER_BLOCK / CHECKPOINT)

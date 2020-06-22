@@ -12,7 +12,8 @@ namespace ANS
 		{
 			struct Options
 			{
-				std::string filepath;
+				std::string inFilePath;
+				std::string outFilePath;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;
@@ -25,7 +26,8 @@ namespace ANS
 		{
 			struct Options
 			{
-				std::string filepath;
+				std::string inFilePath;
+				std::string outFilePath;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;

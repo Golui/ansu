@@ -30,7 +30,7 @@ void readFile(S& os, T& v)
 	os.peek();
 }
 
-#ifdef NO_VIVADO
+#ifdef SOFTWARE
 #	define __compress_function ANS::compress
 #else
 #	define __compress_function hls_compress

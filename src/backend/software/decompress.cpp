@@ -51,7 +51,13 @@ void shift(state_t& newd, state_t& d, u8& available, u8& shift_amount)
 	redistribute(newd, d, available, ANS::all_bits_remaining - shift_amount);
 }
 
-void ANS::decompress(backend::stream<state_t>& out,
+/**
+ * Perform ANS decompression. NB Expects the input data to be reversed.
+ * @param data    Compressed data stream - reversed
+ * @param meta    Metadata stream
+ * @param message Stream to output the message to
+ */
+void ANS::decompress(backend::stream<state_t>& data,
 					 backend::stream<Meta>& meta,
 					 backend::stream<message_t>& message)
 {
@@ -59,7 +65,7 @@ void ANS::decompress(backend::stream<state_t>& out,
 	int cur_channel	  = master.current_channel;
 	u8 available_bits = ANS::all_bits_remaining;
 
-	state_t cur_val = out.read();
+	state_t cur_val = data.read();
 	state_t read	= 0;
 	if(master.dead_bits > 0)
 	{
@@ -69,12 +75,12 @@ void ANS::decompress(backend::stream<state_t>& out,
 
 	std::stack<message_t> reverse_msg;
 
-	while(!out.empty() || available_bits > 0)
+	while(!data.empty() || available_bits > 0)
 	{
 		ANS::State& cur_dec = decoders[cur_channel];
-		if(!out.empty() && available_bits < ANS::all_bits_remaining)
+		if(!data.empty() && available_bits < ANS::all_bits_remaining)
 		{
-			read = out.read();
+			read = data.read();
 			redistribute(read,
 						 cur_val,
 						 available_bits + ANS::all_bits_remaining,

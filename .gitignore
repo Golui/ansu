@@ -11,3 +11,5 @@ res/golden
 __pycache__
 compile_commands.json
 /.clangd
+local
+*.a

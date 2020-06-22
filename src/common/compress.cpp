@@ -74,6 +74,14 @@ namespace ANS
 	} // namespace Compress
 } // namespace ANS
 
+/**
+ * Compress a chunk of the stream.
+ * @param message the message to compress
+ * @param out     compressed data output
+ * @param meta    metadata output
+ * @param padding number of padding bytes in the message
+ * @param control state control
+ */
 void ANS::compress(backend::stream<message_t>& message,
 				   backend::stream<state_t>& out,
 				   backend::stream<ANS::Meta>& meta,

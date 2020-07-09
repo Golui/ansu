@@ -1,5 +1,7 @@
 #include "ansu.hpp"
 
+#include <iostream>
+
 #define MASK(b) ((1 << b) - 1)
 
 namespace ANS
@@ -107,6 +109,8 @@ void ANS::compress(backend::stream<message_t>& message,
 			for(int j = 0; j < CHANNEL_COUNT; j++)
 			{
 				PRAGMA_HLS(unroll)
+				std::cout << "Channel: " << j << " State: " << encoders[j].x
+						  << std::endl;
 				encode_single(encoders[j], message.read());
 			}
 			merge_channels(out, meta);
@@ -134,3 +138,60 @@ void ANS::compress(backend::stream<message_t>& message,
 		control ^= CONTROL_FLUSH;
 	}
 }
+
+#ifndef SOFTWARE
+
+void hls_compress(ANS::backend::stream<message_t>& message,
+				  ANS::backend::stream<state_t>& out,
+				  ANS::backend::stream<ANS::Meta>& meta,
+				  u32 padding,
+				  u8& control)
+{
+	using namespace ANS::Compress;
+
+	PRAGMA_HLS(stream variable = message depth = AVG_MESSAGE_LENGTH)
+
+	if(control & CONTROL_RESET_STATE)
+	{
+		for(int i = 0; i < CHANNEL_COUNT; i++) { reset_encoding(encoders[i]); }
+		reset_encoding_master(master);
+		control ^= CONTROL_RESET_STATE;
+	}
+
+	if(control & CONTROL_ENCODE)
+	{
+		for(int i = 0; i < AVG_MESSAGE_LENGTH / CHANNEL_COUNT; i++)
+		{
+			PRAGMA_HLS(pipeline ii = CHANNEL_COUNT)
+			for(int j = 0; j < CHANNEL_COUNT; j++)
+			{
+				PRAGMA_HLS(unroll)
+				encode_single(encoders[j], message.read());
+			}
+			merge_channels(out, meta);
+		}
+		control ^= CONTROL_ENCODE;
+	}
+
+	if(control & CONTROL_FLUSH)
+	{
+		out << (state_t) master.partial;
+
+		ANS::Meta finished;
+
+		finished.offset		 = master.meta_offset + 1;
+		finished.dead_bits	 = master.partial_bits;
+		finished.message_pad = padding;
+		for(int i = 0; i < CHANNEL_COUNT; i++)
+			finished.control_state[i] = encoders[i].x - TABLE_SIZE;
+
+		finished.channels		 = CHANNEL_COUNT;
+		finished.current_channel = CHANNEL_COUNT - 1;
+
+		meta << finished;
+
+		control ^= CONTROL_FLUSH;
+	}
+}
+
+#endif

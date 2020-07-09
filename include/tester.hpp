@@ -1,4 +1,4 @@
-#include "ansu.hpp"
+#include "backend/hls/ansu.ipp"
 #include "ints.hpp"
 
 #include <fstream>
@@ -312,7 +312,7 @@ namespace ANS
 			{
 				Compression t(location, tname);
 				t.setVerbose();
-#ifdef NO_VIVADO
+#ifdef SOFTWARE
 				t.run(true);
 				hadErrors |= t.run();
 #else
@@ -323,7 +323,7 @@ namespace ANS
 			return hadErrors;
 		}
 
-#ifdef NO_VIVADO
+#ifdef SOFTWARE
 
 		class Decompression
 		{

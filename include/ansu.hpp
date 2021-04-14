@@ -1,6 +1,6 @@
 #pragma once
 
-// #include "backend/backend.hpp"
+#include "backend/backend.hpp"
 #include "backend/stream.hpp"
 #include "data/ans_table.hpp"
 #include "ints.hpp"
@@ -59,7 +59,7 @@ namespace ANS
 	void compress(backend::stream<message_t>& message,
 				  backend::stream<state_t>& out,
 				  backend::stream<Meta>& meta,
-				  u32 dropBytes,
+				  u32 padding,
 				  u8& control);
 
 	void decompress(backend::stream<state_t>& out,

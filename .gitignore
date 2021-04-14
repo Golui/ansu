@@ -2,7 +2,10 @@
 .DS_Store
 *.ipynb*
 bin
+cli/bin
+out
 ansu
+ansu_cli
 tools/out
 .clang-format
 res/compressed

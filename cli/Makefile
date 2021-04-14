@@ -1,18 +1,20 @@
 
 INCLUDE := include
 SOURCE := src
-CLI_MODULE := cli
-SOURCE_VIVADO := vivado
-LIB := lib
+LIB := ../lib
 SCHEMA := schema
 BIN := bin
 
 CLIBS := microtar
-LIBS := $(CLIBS)
+LIBS := $(CLIBS) CLI11 ansu
 
 LINCLUDES := $(foreach lib, $(LIBS),-I $(LIB)/$(lib)/include)
 LSEARCH := $(foreach lib, $(CLIBS),-L $(LIB)/$(lib))
 LFLAGS := $(foreach lib, $(CLIBS),-l$(lib))
+
+LINCLUDES += -I ../include
+LSEARCH += -L ../out
+LFLAGS += -lansu
 
 CPP := g++
 C := gcc
@@ -51,42 +53,27 @@ endif
 
 CPP_FLAGS := $(CPP_FLAGS) -D$(BACKEND)
 
-CFILES := $(shell find $(SOURCE) -name "*.cpp" ! -path "$(SOURCE)/backend/*")
-HFILES := $(shell find $(INCLUDE) -name "*.hpp" -or -name "*.h" ! -path "$(INCLUDE)/backend/*")
-
-ifeq "$(BACKEND)" "SOFTWARE"
-	override CFILES += $(shell find $(SOURCE)/backend/software -name "*.cpp")
-	override HFILES += $(shell find $(INCLUDE)/backend/software -name "*.hpp")
-endif
+CFILES := $(shell find $(SOURCE) -name "*.cpp")
+HFILES := $(shell find $(INCLUDE) -name "*.hpp" -or -name "*.h")
 
 OFILES := $(patsubst $(SOURCE)/%.cpp,$(BIN)/%.o, $(CFILES))
 
 LD_FLAGS := $(LD_FLAGS) $(LSEARCH) $(LFLAGS)
 
-all: libs libansu ansu_cli
-
-$(CLIBS):
-	cd $(LIB)/$@ && make C=$(C) CPP=$(CPP)
-
-libs: $(CLIBS)
+all: ansu_cli
 
 $(BIN)/%.o: $(SOURCE)/%.cpp
 	@-mkdir -p $(@D)
 	$(CPP) $(CPP_FLAGS) -o $@ -c $<
 
-libansu: $(OFILES)
-	@-mkdir -p out
-	ar rcs out/libansu.a $^
-
-ansu_cli: libansu
-	$(MAKE) -C $(CLI_MODULE)
-	cp $(CLI_MODULE)/ansu_cli ../ansu
+ansu_cli: $(OFILES)
+	
+	$(CPP) $(CPP_FLAGS) -o $@ $^ $(LD_FLAGS)
 
 -include $(OFILES:.o=.d)
 
 .PHONY: clean all format
 clean:
-	$(MAKE) -C $(CLI_MODULE) clean
 	rm -rf ./$(BIN)/* ansu_cli
 
 format: $(CFILES)

@@ -1,6 +1,8 @@
 #include "ansu.hpp"
 
-#include <iostream>
+#ifdef SOFTWARE
+	#include <iostream>
+#endif
 
 #define MASK(b) ((1 << b) - 1)
 
@@ -109,8 +111,11 @@ void ANS::compress(backend::stream<message_t>& message,
 			for(int j = 0; j < CHANNEL_COUNT; j++)
 			{
 				PRAGMA_HLS(unroll)
+				// TODO
+				#ifdef SOFTWARE
 				std::cout << "Channel: " << j << " State: " << encoders[j].x
 						  << std::endl;
+				#endif
 				encode_single(encoders[j], message.read());
 			}
 			merge_channels(out, meta);
@@ -139,6 +144,8 @@ void ANS::compress(backend::stream<message_t>& message,
 	}
 }
 
+// TODO - This was done because Vivado used to not be able to have
+// namespaced functions as accelerated. This's probably since been fixed
 #ifndef SOFTWARE
 
 void hls_compress(ANS::backend::stream<message_t>& message,

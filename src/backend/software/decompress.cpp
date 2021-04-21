@@ -57,9 +57,9 @@ void shift(state_t& newd, state_t& d, u8& available, u8& shift_amount)
  * @param meta    Metadata stream
  * @param message Stream to output the message to
  */
-void ANS::decompress(backend::stream<state_t>& data,
-					 backend::stream<Meta>& meta,
-					 backend::stream<message_t>& message)
+ANS::DecompressResult ANS::decompress(backend::stream<state_t>& data,
+									  backend::stream<Meta>& meta,
+									  backend::stream<message_t>& message)
 {
 	init_decoders(meta);
 	int cur_channel	  = master.current_channel;
@@ -100,6 +100,12 @@ void ANS::decompress(backend::stream<state_t>& data,
 		cur_channel = (CHANNEL_COUNT + cur_channel - 1) % CHANNEL_COUNT;
 	}
 
+	// After we are done, let's verify the block
+	for(int i = 0; i < CHANNEL_COUNT; i++)
+		// We always start from 0 state, so if we ended up somewhere else
+		// something broke along the way.
+		if(decoders[CHANNEL_COUNT].x != 0) return false;
+
 	// Account for the compressor "jump start"
 	for(int i = 0; i < CHANNEL_COUNT && !reverse_msg.empty(); i++)
 		reverse_msg.pop();
@@ -111,4 +117,6 @@ void ANS::decompress(backend::stream<state_t>& data,
 		message << reverse_msg.top();
 		reverse_msg.pop();
 	}
+
+	return true;
 }

@@ -21,6 +21,8 @@ namespace ANS
 {
 	constexpr static const u8 all_bits_remaining = (sizeof(state_t) << 3);
 
+	using DecompressResult = bool;
+
 	struct State
 	{
 		state_t x		= 0;
@@ -42,7 +44,7 @@ namespace ANS
 		bool operator==(const Meta other)
 		{
 			if(this->channels != other.channels) return false;
-			for(int i = 0; i < this->channels; i++)
+			for(u32 i = 0; i < this->channels; i++)
 			{
 				if(this->control_state[i] != other.control_state[i])
 					return false;
@@ -62,7 +64,7 @@ namespace ANS
 				  u32 padding,
 				  u8& control);
 
-	void decompress(backend::stream<state_t>& out,
-					backend::stream<Meta>& meta,
-					backend::stream<message_t>& message);
+	DecompressResult decompress(backend::stream<state_t>& out,
+								backend::stream<Meta>& meta,
+								backend::stream<message_t>& message);
 } // namespace ANS

@@ -23,10 +23,16 @@ int ANS::driver::decompress::run(OptionsP opts)
 	ANS::backend::stream<state_t> data;
 	ANS::backend::stream<ANS::Meta> meta;
 	ANS::backend::stream<message_t> message;
+	u32 blockNum = 0;
 	while(reader.readBlock(data, meta))
 	{
-		ANS::decompress(data, meta, message);
+		if(!ANS::decompress(data, meta, message))
+		{
+			std::cout << "Block " << blockNum
+					  << " did not end at state 0; invalid decompression.";
+		}
 		while(!message.empty()) writeFile(out, message.read());
+		blockNum++;
 	}
 
 	return 0;

@@ -66,7 +66,7 @@ LD_FLAGS := $(LD_FLAGS) $(LSEARCH) $(LFLAGS)
 all: libs libansu ansu_cli
 
 $(CLIBS):
-	cd $(LIB)/$@ && make C=$(C) CPP=$(CPP)
+	cd $(LIB)/$@ && $(MAKE) C=$(C) CPP=$(CPP)
 
 libs: $(CLIBS)
 
@@ -75,12 +75,12 @@ $(BIN)/%.o: $(SOURCE)/%.cpp
 	$(CPP) $(CPP_FLAGS) -o $@ -c $<
 
 libansu: $(OFILES)
-	@-mkdir -p out
-	ar rcs out/libansu.a $^
+	echo "Libbing ansu"
+	ar rcs libansu.a $^
 
 ansu_cli: libansu
 	$(MAKE) -C $(CLI_MODULE)
-	cp $(CLI_MODULE)/ansu_cli ../ansu
+	cp $(CLI_MODULE)/ansu_cli ansu
 
 -include $(OFILES:.o=.d)
 

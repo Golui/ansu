@@ -12,7 +12,7 @@ LINCLUDES := $(foreach lib, $(LIBS),-I $(LIB)/$(lib)/include)
 LSEARCH := $(foreach lib, $(CLIBS),-L $(LIB)/$(lib))
 LFLAGS := $(foreach lib, $(CLIBS),-l$(lib))
 
-LINCLUDES += -I ../include -I lib/CLI11/include
+LINCLUDES += -I ../include -I ../include/ansu -I lib/CLI11/include
 LSEARCH += -L ..
 LFLAGS := -lansu $(LFLAGS)
 

@@ -4,7 +4,6 @@
 bin
 cli/bin
 out
-ansu
 ansu_cli
 tools/out
 .clang-format

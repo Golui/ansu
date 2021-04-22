@@ -1,5 +1,5 @@
 
-INCLUDE := include
+INCLUDE := include include/ansu
 SOURCE := src
 CLI_MODULE := cli
 SOURCE_VIVADO := vivado
@@ -40,7 +40,7 @@ ifeq "$(BUILD_PLATFORM)" "macOS"
 	endif
 endif
 
-INCLUDE_SEARCH := -I $(INCLUDE) $(LINCLUDES)
+INCLUDE_SEARCH := $(foreach INCL, $(INCLUDE), -I $(INCL)) $(LINCLUDES)
 
 CPP_FLAGS := -MMD -MP -Wall -g -pedantic -std=c++11 -Wno-unknown-pragmas \
 			 $(INCLUDE_SEARCH)
@@ -52,11 +52,11 @@ endif
 CPP_FLAGS := $(CPP_FLAGS) -D$(BACKEND)
 
 CFILES := $(shell find $(SOURCE) -name "*.cpp" ! -path "$(SOURCE)/backend/*")
-HFILES := $(shell find $(INCLUDE) -name "*.hpp" -or -name "*.h" ! -path "$(INCLUDE)/backend/*")
+HFILES := $(shell find $(INCLUDE) -name "*.hpp" -or -name "*.h" ! -path "$(INCLUDE)/ansu/backend/*")
 
 ifeq "$(BACKEND)" "SOFTWARE"
 	override CFILES += $(shell find $(SOURCE)/backend/software -name "*.cpp")
-	override HFILES += $(shell find $(INCLUDE)/backend/software -name "*.hpp")
+	override HFILES += $(shell find $(INCLUDE)/ansu/backend/software -name "*.hpp")
 endif
 
 OFILES := $(patsubst $(SOURCE)/%.cpp,$(BIN)/%.o, $(CFILES))

@@ -26,7 +26,8 @@ int ANS::driver::decompress::run(OptionsP opts)
 	u32 blockNum = 0;
 	while(reader.readBlock(data, meta))
 	{
-		if(!ANS::decompress(data, meta, message))
+		bool result = ANS::decompress(data, meta, message);
+		if(!result)
 		{
 			std::cout << "Block " << blockNum
 					  << " did not end at state 0; invalid decompression.";

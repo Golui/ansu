@@ -13,8 +13,7 @@ namespace ANS
 		// TODO Remove using
 		using namespace ANS::StaticTable;
 
-		std::unique_ptr<ContextT> mainCtx =
-			memory::make_unique<ContextT>(CHANNEL_COUNT);
+		ContextT mainCtx = ContextT(CHANNEL_COUNT);
 
 	} // namespace Compress
 } // namespace ANS
@@ -27,31 +26,13 @@ namespace ANS
  * @param padding number of padding bytes in the message
  * @param control state control
  */
-void ANS::compress(backend::stream<message_t>& message,
+void ANS::compress(backend::side_stream<message_t>& message,
 				   backend::stream<state_t>& out,
-				   backend::stream<ANS::Meta>& meta,
-				   u32 padding,
-				   u8& control)
+				   backend::stream<ANS::Meta>& meta)
 {
 	using namespace ANS::Compress;
 
 	PRAGMA_HLS(stream variable = message depth = AVG_MESSAGE_LENGTH)
 
-	if(control & CONTROL_RESET_STATE)
-	{
-		mainCtx->initialize();
-		control ^= CONTROL_RESET_STATE;
-	}
-
-	if(control & CONTROL_ENCODE)
-	{
-		mainCtx->compress(message, out, meta);
-		control ^= CONTROL_ENCODE;
-	}
-
-	if(control & CONTROL_FLUSH)
-	{
-		mainCtx->flush(out, meta, padding);
-		control ^= CONTROL_FLUSH;
-	}
+	mainCtx.compress(message, out, meta);
 }

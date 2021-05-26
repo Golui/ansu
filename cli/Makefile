@@ -5,8 +5,8 @@ LIB := ../lib
 SCHEMA := schema
 BIN := bin
 
-CLIBS := microtar
-LIBS := $(CLIBS) CLI11 ansu
+CLIBS := microtar 
+LIBS := $(CLIBS) cereal CLI11 ansu
 
 LINCLUDES := $(foreach lib, $(LIBS),-I $(LIB)/$(lib)/include)
 LSEARCH := $(foreach lib, $(CLIBS),-L $(LIB)/$(lib))
@@ -44,7 +44,7 @@ endif
 
 INCLUDE_SEARCH := -I $(INCLUDE) $(LINCLUDES)
 
-CPP_FLAGS := -MMD -MP -Wall -g -pedantic -std=c++11 -Wno-unknown-pragmas \
+CPP_FLAGS := -MMD -MP -Wall -g -pedantic -std=c++11 -Wno-unknown-pragmas -fmax-errors=8\
 			 $(INCLUDE_SEARCH)
 
 ifndef BACKEND

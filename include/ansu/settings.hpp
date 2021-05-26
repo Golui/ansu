@@ -11,30 +11,13 @@
  * Specify the "average message length"; this is used excusively for tests.
  * encode_stream will be called every time the FIFO fills up with
  * AVG_MESSAGE_LENGTH symbols; this is due to potential memory issues
- * if the test vector is sufficiently large. Needs to be divisible by
- * CHANNEL_COUNT.
+ * if the test vector is sufficiently large.
  */
 #define AVG_MESSAGE_LENGTH 256
 
 /**
- * Specify how often to emit ANS::Meta
- * @param state_t size of state
+ * An ANS::Meta will be emitted every CHECKPOINT elements written to the output
+ * stream
  */
-#define MESSAGES_PER_BLOCK 256
+#define CHECKPOINT 65536
 
-/**
- * Number of messages to emit an ANS::Meta after.
- */
-#define CHECKPOINT 64
-
-/**
- *  Convenience
- */
-#define DATA_BLOCK_SIZE (AVG_MESSAGE_LENGTH * MESSAGES_PER_BLOCK)
-
-#define META_BLOCK_SIZE (CHANNEL_COUNT * MESSAGES_PER_BLOCK / CHECKPOINT)
-
-// TODO
-#if AVG_MESSAGE_LENGTH % CHANNEL_COUNT != 0
-#	error "AVG_MESSAGE_LENGTH must be divisible by CHANNEL_COUNT"
-#endif

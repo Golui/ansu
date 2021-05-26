@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CLI11.hpp"
+#include "ansu/ints.hpp"
 
 #include <memory.h>
 
@@ -8,6 +9,7 @@ namespace ANS
 {
 	namespace driver
 	{
+		constexpr u64 MAX_BUFFER_SIZE = 256 << 20;
 		namespace compress
 		{
 			struct Options

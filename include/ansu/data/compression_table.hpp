@@ -6,32 +6,47 @@
 
 namespace ANS
 {
-	template <u32 MinStateWidth,
-			  u32 MinMessageWidth,
-			  class = typename std::enable_if<(MinStateWidth > 0)>::type,
-			  class = typename std::enable_if<(MinMessageWidth > 0)>::type>
+	namespace tables
+	{
+		enum Type
+		{
+			Static,
+			Dynamic
+		};
+	} // namespace tables
+
+	template <typename _StateT, typename _MessageT>
 	struct CompressionTable
 	{
-		constexpr static u32 minStateWidth	 = MinStateWidth;
-		constexpr static u32 minMessageWidth = MinMessageWidth;
+	protected:
+		u32 _alphabetSize;
+		u32 _tableSizeLog;
+		u32 _tableSize;
 
-		using StateT		 = typename integer::fitting<MinStateWidth>::type;
-		using MessageT		 = typename integer::fitting<MinMessageWidth>::type;
+	public:
+		constexpr static u32 stateWidth		= sizeof(_StateT) << 3;
+		constexpr static u32 mesessageWidth = sizeof(_MessageT) << 3;
+
+		using StateT		 = _StateT;
+		using MessageT		 = _MessageT;
 		using EncodingTableT = StateT;
 		using MessageIndexT	 = u32;
 		using NbBitsT		 = u32;
 		using NbBitsDeltaT	 = s32;
 
-		const u32 alphabetSize;
-		const u32 tableSizeLog;
-		const u32 tableSize;
+		CompressionTable() {}
 
 		CompressionTable(u32 alphabetSize, u32 tableSizeLog)
-			: alphabetSize(alphabetSize),
-			  tableSizeLog(tableSizeLog),
-			  tableSize(1 << tableSizeLog)
+			: _alphabetSize(alphabetSize),
+			  _tableSizeLog(tableSizeLog),
+			  _tableSize(1 << tableSizeLog)
 		{}
 
+		u32 alphabetSize() const { return this->_alphabetSize; };
+		u32 tableSizeLog() const { return this->_tableSizeLog; };
+		u32 tableSize() const { return this->_tableSize; };
+
+		virtual tables::Type type() const						 = 0;
 		virtual MessageT states(StateT index) const				 = 0;
 		virtual StateT newX(StateT index) const					 = 0;
 		virtual EncodingTableT encodingTable(StateT index) const = 0;
@@ -43,13 +58,12 @@ namespace ANS
 		virtual ~CompressionTable() {}
 	};
 
-	// Assumptions:
-	// - By default, the StateT is wide enough to contain (1 << TableSizeLog).
-	// - `nb_bits_delta` is assumed to be 8 bits wide
-	template <u32 MinS = 32, u32 MinM = 32>
-	struct DynamicCompressionTable : public CompressionTable<MinS, MinM>
+	// TODO While this is parametrized, we assume the table is always stored as
+	// 32 bit in the archive.
+	template <typename _StateT = u32, typename _MessageT = u32>
+	struct DynamicCompressionTable : public CompressionTable<_StateT, _MessageT>
 	{
-		using Base			 = CompressionTable<MinS, MinM>;
+		using Base			 = CompressionTable<_StateT, _MessageT>;
 		using StateT		 = typename Base::StateT;
 		using MessageT		 = typename Base::MessageT;
 		using MessageIndexT	 = typename Base::MessageIndexT;
@@ -67,9 +81,13 @@ namespace ANS
 		std::vector<StateT> _adjStart			   = {0};
 
 	public:
+		DynamicCompressionTable() : Base() {}
+
 		DynamicCompressionTable(u32 alphabetSize, u32 tableSizeLog)
 			: Base(alphabetSize, tableSizeLog)
 		{}
+
+		virtual tables::Type type() const override { return tables::Dynamic; }
 
 		virtual MessageT states(StateT index) const { return _states[index]; }
 		virtual StateT newX(StateT index) const { return _newX[index]; }
@@ -97,11 +115,9 @@ namespace ANS
 		}
 	};
 
-	class StaticCompressionTable
-		: public CompressionTable<sizeof(state_t) << 3, sizeof(message_t) << 3>
+	class StaticCompressionTable : public CompressionTable<state_t, message_t>
 	{
-		using Base =
-			CompressionTable<sizeof(state_t) << 3, sizeof(message_t) << 3>;
+		using Base = CompressionTable<state_t, message_t>;
 
 	public:
 		using StateT		 = typename Base::StateT;
@@ -112,6 +128,8 @@ namespace ANS
 		using NbBitsT		 = typename Base::NbBitsT;
 
 		StaticCompressionTable() : Base(ALPHABET_LENGTH, TABLE_SIZE_LOG) {}
+
+		virtual tables::Type type() const override { return tables::Static; }
 
 		virtual MessageT states(StateT index) const override
 		{
@@ -147,6 +165,14 @@ namespace ANS
 		{
 			return StaticTable::adj_start[index];
 		}
+
+		template <typename Archive>
+		void serialize(Archive& ar)
+		{
+			u32 dummy = 0xDEADBEEF;
+			ar(dummy);
+		}
 	};
+
 } // namespace ANS
 

@@ -1,5 +1,5 @@
 
-INCLUDE := include include/ansu
+INCLUDE := include include/ansu lib/cereal/include
 SOURCE := src
 CLI_MODULE := cli
 SOURCE_VIVADO := vivado
@@ -42,7 +42,7 @@ endif
 
 INCLUDE_SEARCH := $(foreach INCL, $(INCLUDE), -I $(INCL)) $(LINCLUDES)
 
-CPP_FLAGS := -MMD -MP -Wall -g -pedantic -std=c++11 -Wno-unknown-pragmas \
+CPP_FLAGS := -MMD -MP -Wall -g -pedantic -std=c++11 -Wno-unknown-pragmas -fmax-errors=8\
 			 $(INCLUDE_SEARCH)
 
 ifndef BACKEND
@@ -80,7 +80,7 @@ libansu: $(OFILES)
 
 ansu_cli: libansu
 	$(MAKE) -C $(CLI_MODULE)
-	cp $(CLI_MODULE)/ansu_cli ansu
+	cp $(CLI_MODULE)/ansu_cli ansu_cli
 
 -include $(OFILES:.o=.d)
 

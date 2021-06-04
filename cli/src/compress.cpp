@@ -2,20 +2,15 @@
 #include "driver.hpp"
 #include "io/archive.hpp"
 
+#include <array>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <stdio.h>
 
-// NB Two variants needed due to the specifics of Vivado HLS testbench.
-#ifdef SOFTWARE
-#	define compress_fun ANS::compress
-#else
-#	define compress_fun hls_compress
-#endif
-
-using InDataT = ANS::backend::side<message_t>;
+using InDataT  = ANS::backend::side<message_t>;
+using ContextT = ANS::ChannelCompressionContext<ANS::StaticCompressionTable>;
 
 template <typename T>
 std::streamsize getFileSize(T& file)
@@ -32,34 +27,49 @@ std::streamsize getFileSize(T& file)
 // TODO efficiency
 int ANS::driver::compress::run(OptionsP opts)
 {
+	using StateT   = typename ContextT::StateT;
+	using MessageT = typename ContextT::MessageT;
+	using Meta	   = typename ContextT::Meta;
+
 	std::ifstream in(opts->inFilePath,
 					 std::ios::binary); // Stream nas interesujacy
 
-	ANS::io::ArchiveWriter writer(opts->outFilePath);
+	auto inSize = getFileSize(in);
 
-	writer.createHeader(ANS::Compress::mainCtx);
+	auto mainCtxPtr = std::make_shared<ContextT>(opts->channels);
+	auto& mainCtx	= *mainCtxPtr;
+
+	mainCtx.setCheckpointFrequency(opts->checkpoint);
+	mainCtx.setChunkSize(opts->chunkSize);
+
+	ANS::io::ArchiveWriter<ContextT> writer(opts->outFilePath);
+
+	writer.bindContext(mainCtxPtr, inSize);
 
 	auto begin = std::chrono::steady_clock::now();
 
-	message_t msgbuf[AVG_MESSAGE_LENGTH];
-	state_t statebuf[CHECKPOINT];
-	u64 counts[256];
+	std::array<u64, 256> counts = {0};
+	MessageT* msgbuf			= new MessageT[opts->chunkSize];
+	StateT* statebuf			= new StateT[opts->checkpoint];
 
-	ANS::backend::side_stream<message_t> msg;
-	ANS::backend::stream<state_t> out;
-	ANS::backend::stream<ANS::Meta> ometa;
+	ANS::backend::side_stream<MessageT> msg;
+	ANS::backend::stream<StateT> out;
+	ANS::backend::stream<Meta> ometa;
 
 	u32 j = 0;
-	while(in.good() && !in.eof())
+	while(in.peek() != EOF)
 	{
 		u32 i = 0;
 
-		in.read((char*) msgbuf, AVG_MESSAGE_LENGTH * sizeof(message_t));
-		auto read = in.gcount();
+		in.read((char*) msgbuf, opts->chunkSize * sizeof(message_t));
+		u64 read = in.gcount();
 
-		for(u32 k; k < read; k++) { counts[((u8*) msgbuf)[k]]++; }
+		for(decltype(read) k = 0; k < read; k++)
+		{
+			counts[((u8*) msgbuf)[k]]++;
+		}
 
-		if(read != AVG_MESSAGE_LENGTH * sizeof(message_t) || in.eof())
+		if(read != opts->chunkSize * sizeof(message_t) || in.peek() == EOF)
 		{
 			for(; i < read - 1; i++) { msg << InDataT(msgbuf[i]); }
 			auto last = InDataT(msgbuf[i]);
@@ -69,16 +79,28 @@ int ANS::driver::compress::run(OptionsP opts)
 		{
 			for(; i < read; i++) { msg << InDataT(msgbuf[i]); }
 		}
+		mainCtx.compress(msg, out, ometa);
 
-		compress_fun(msg, out, ometa);
-
-		for(; !out.empty() && j < CHECKPOINT; j++) statebuf[j] = out.read();
-		while(!ometa.empty())
+		while(!out.empty())
 		{
-			ANS::Meta meta = ometa.read();
-			writer.writeBlock(j, statebuf, meta);
-			j = 0;
+			for(; !out.empty() && j < opts->checkpoint; j++)
+				statebuf[j] = out.read();
+			if(!ometa.empty())
+			{
+				Meta meta = ometa.read();
+				/*auto result =*/writer.writeBlock(j, statebuf, meta);
+				//				std::cout << "Wrote " << result << " bytes.\n";
+
+				j = 0;
+			}
 		}
+	}
+
+	if(!ometa.empty())
+	{
+		Meta meta = ometa.read();
+		/*auto result =*/writer.writeBlock(0, statebuf, meta);
+		if(!ometa.empty()) std::runtime_error("Too many meta objects!");
 	}
 
 	auto end = std::chrono::steady_clock::now();
@@ -87,15 +109,18 @@ int ANS::driver::compress::run(OptionsP opts)
 			.count()
 		/ 1.0e6;
 
-	auto inSize = getFileSize(in);
-	u32 outSize = getFileSize(writer.fileHandle);
+	auto outSize = getFileSize(writer.fileHandle);
 
 	double entropy = 0.0;
 
+	u64 sum = 0;
+
+	for(u16 k = 0; k < 256; k++) sum += counts[k];
 	for(u16 k = 0; k < 256; k++)
 	{
 		u32 count = counts[k];
-		if(count != 0) entropy -= count / 256.0 * (log2(count) - 8);
+		if(count != 0)
+			entropy -= count / double(sum) * (log2(count / double(sum)));
 	}
 
 	std::cout << std::setprecision(6);
@@ -107,12 +132,17 @@ int ANS::driver::compress::run(OptionsP opts)
 	std::cout << "\t"
 			  << "Output size:      " << outSize << "\n";
 	std::cout << "\t"
-			  << "Ratio:            " << 100 * outSize / ((double) inSize)
+			  << "Ratio:            " << 100.0 * outSize / ((double) inSize)
 			  << "%"
 			  << "\n";
 	std::cout << "\t"
-			  << "Theoretical best: " << entropy * 12.5 << "%" // * 8 / 100
+			  << "Theoretical best: " << entropy * 12.5 << "%"
 			  << "\n";
+	std::cout << "\t"
+			  << "Entropy:          " << entropy << " bits/symbol\n";
+
+	delete[] msgbuf;
+	delete[] statebuf;
 
 	return 0;
 }

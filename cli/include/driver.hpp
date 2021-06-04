@@ -2,6 +2,7 @@
 
 #include "CLI11.hpp"
 #include "ansu/ints.hpp"
+#include "ansu/settings.hpp"
 
 #include <memory.h>
 
@@ -16,6 +17,9 @@ namespace ANS
 			{
 				std::string inFilePath;
 				std::string outFilePath;
+				u64 checkpoint = CHECKPOINT;
+				u32 channels   = CHANNEL_COUNT;
+				u64 chunkSize  = AVG_MESSAGE_LENGTH;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;
@@ -30,6 +34,7 @@ namespace ANS
 			{
 				std::string inFilePath;
 				std::string outFilePath;
+				bool ignoreSizeWarning = false;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;

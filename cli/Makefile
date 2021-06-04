@@ -5,15 +5,15 @@ LIB := ../lib
 SCHEMA := schema
 BIN := bin
 
-CLIBS := microtar 
+CLIBS := microtar fallocate
 LIBS := $(CLIBS) cereal CLI11 ansu
 
 LINCLUDES := $(foreach lib, $(LIBS),-I $(LIB)/$(lib)/include)
 LSEARCH := $(foreach lib, $(CLIBS),-L $(LIB)/$(lib))
 LFLAGS := $(foreach lib, $(CLIBS),-l$(lib))
 
-LINCLUDES += -I ../include -I ../include/ansu -I lib/CLI11/include
-LSEARCH += -L ..
+LINCLUDES += -I ../include -I ../include/ansu -I lib/CLI11/include -I lib/fallocate -I lib/mio/single_include
+LSEARCH += -L .. -L lib/fallocate
 LFLAGS := -lansu $(LFLAGS)
 
 CPP := g++

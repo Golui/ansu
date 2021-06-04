@@ -55,6 +55,10 @@ namespace ANS
 		virtual StateT start(MessageIndexT index) const			 = 0;
 		virtual StateT adjStart(MessageIndexT index) const		 = 0;
 
+		template <typename Archive>
+		void serialize(Archive& ar)
+		{}
+
 		virtual ~CompressionTable() {}
 	};
 

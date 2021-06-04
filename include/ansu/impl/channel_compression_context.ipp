@@ -4,6 +4,9 @@
 #include "data/compression_table.hpp"
 #include "settings.hpp"
 
+#include <bitset>
+#include <cassert>
+#include <cereal/types/vector.hpp>
 #include <vector>
 
 #ifdef SOFTWARE
@@ -21,21 +24,30 @@ namespace ANS
 									_Table,
 									Container>
 	{
-		const u32 channelCount;
+		using BaseT =
+			CompressionContext<ChannelCompressionContext, _Table, Container>;
 
 		using Table	   = _Table;
 		using StateT   = typename Table::StateT;
 		using MessageT = typename Table::MessageT;
 		using NbBitsT  = typename Table::NbBitsT;
+		template <typename... T>
+		using ContainerT = Container<T...>;
 
 		// TODO Refer to def in base class
-		using DecompressResult = bool;
+		using DecompressResult = typename BaseT::DecompressResult;
 
 		struct State
 		{
 			StateT x;
 			StateT partial;
 			u8 partialBits;
+
+			template <typename Archive>
+			void serialize(Archive& ar)
+			{
+				ar(this->x, this->partial, this->partialBits);
+			}
 		};
 
 		struct Meta
@@ -62,27 +74,37 @@ namespace ANS
 			bool operator!=(const Meta other) { return !(*this == other); }
 
 			template <typename Archive>
-			void serialize(Archive& ar) const
+			void serialize(Archive& ar)
 			{
 				ar(this->channels, this->controlState);
 			}
 		};
 
 		Table ansTable;
-		Container<State> encoders;
+		u32 channelCount;
+		Container<State> coders;
 		u32 lastChannel;
 		State master;
+		Container<MessageT> reverseMsg;
+		u8 deadBits;
 
 	private:
 	public:
-		ChannelCompressionContext(u32 channelCount) : channelCount(channelCount)
+		ChannelCompressionContext(u32 channelCount = 2)
+			: channelCount(channelCount)
 		{
-			this->encoders = Container<State>(this->channelCount);
+			this->coders = Container<State>(this->channelCount);
+			this->resetImpl();
+		}
+
+		void resetDecompressBuffer()
+		{
+			reverseMsg.reserve((u64)(this->_checkpointFrequency / 0.6));
 		}
 
 		void resetEncoding(State& s)
 		{
-			s.x			  = ansTable.encodingTable(0);
+			s.x			  = ansTable.tableSize();
 			s.partial	  = 0;
 			s.partialBits = 0;
 		}
@@ -93,34 +115,14 @@ namespace ANS
 			s.partialBits = this->allBitsRemaining;
 		}
 
-		void initializeImpl()
+		void resetImpl()
 		{
 			for(u32 i = 0; i < this->channelCount; i++)
 			{
-				resetEncoding(this->encoders[i]);
+				resetEncoding(this->coders[i]);
 			}
 			resetEncodingMaster(master);
-		}
-
-		void flushImpl(backend::stream<StateT>& out,
-					   backend::stream<Meta>& meta,
-					   u32 padding)
-		{
-			//			out << master.partial;
-			//
-			//			Meta finished(this->channelCount);
-			//
-			//			finished.offset		= master.metaOffset + 1;
-			//			finished.deadBits	= master.partialBits;
-			//			finished.messagePad = padding;
-			//			for(u32 i = 0; i < this->channelCount; i++)
-			//				finished.controlState[i] =
-			//					this->encoders[i].x -
-			// this->ansTable.tableSize();
-			//
-			//			finished.currentChannel = this->channelCount - 1;
-			//
-			//			meta << finished;
+			this->reverseMsg = Container<MessageT>();
 		}
 
 		void encodeSingle(State& s, MessageT current)
@@ -146,13 +148,27 @@ namespace ANS
 						   bool hadLast)
 		{
 			PRAGMA_HLS(inline)
+
+			auto emitMeta = [&]() {
+				PRAGMA_HLS(occurence CHECKPOINT)
+
+				Meta finished(this->channelCount);
+
+				for(u32 i = 0; i < this->channelCount; i++)
+				{
+					finished.controlState[i] =
+						this->coders[i].x - this->ansTable.tableSize();
+				}
+
+				meta << finished;
+			};
 			for(u32 j = 0; j < this->channelCount; j++)
 			{
 				PRAGMA_HLS(unroll)
 
 				u32 k = j + this->lastChannel;
 				if(k >= this->channelCount) k -= this->channelCount;
-				State& s = this->encoders[k];
+				State& s = this->coders[j];
 				if(s.partialBits > master.partialBits)
 				{
 					// Write them
@@ -165,27 +181,10 @@ namespace ANS
 					master.partial = s.partial << (master.partialBits);
 
 					this->checkpointCounter++;
-					if(hadLast
-					   || this->checkpointCounter == this->_checkpointFrequency)
+					if(this->checkpointCounter == this->_checkpointFrequency)
 					{
-						PRAGMA_HLS(occurence CHECKPOINT)
 						this->checkpointCounter = 0;
-						hadLast					= false;
-
-						Meta finished(this->channelCount);
-
-						for(u32 i = 0; i < this->channelCount; i++)
-						{
-							u32 k2 = i + this->lastChannel;
-							if(k2 >= this->channelCount)
-								k2 -= this->channelCount;
-
-							finished.controlState[i] =
-								this->encoders[k].x
-								- this->ansTable.tableSize();
-						}
-
-						meta << finished;
+						emitMeta();
 					}
 				} else
 				{
@@ -195,7 +194,12 @@ namespace ANS
 
 					master.partialBits -= s.partialBits;
 				}
+
+				s.partial	  = 0;
+				s.partialBits = 0;
 			}
+
+			if(hadLast) emitMeta();
 		}
 
 		// TODO New plan: Implement side channel data with ap_axis or similar,
@@ -209,7 +213,7 @@ namespace ANS
 						  backend::stream<Meta>& meta)
 		{
 			bool hadLast = false;
-			for(u32 i = 0; i < AVG_MESSAGE_LENGTH / this->channelCount; i++)
+			for(u32 i = 0; i < this->_chunkSize / this->channelCount; i++)
 			{
 				PRAGMA_HLS(pipeline ii = CHANNEL_COUNT)
 				for(u32 j = 0; j < this->channelCount; j++)
@@ -218,13 +222,19 @@ namespace ANS
 					u32 k = j + this->lastChannel;
 					if(k >= this->channelCount) k -= this->channelCount;
 					auto cur = message.read();
-// TODO
-#ifdef SOFTWARE
-					std::cout << "Channel: " << k << " State: " << encoders[k].x
-							  << std::endl;
-#endif
-					encodeSingle(this->encoders[k],
-								 reinterpret_cast<MessageT>(cur.data));
+					//					auto oldX = this->coders[k].x;
+					this->encodeSingle(this->coders[k],
+									   reinterpret_cast<MessageT>(cur.data));
+					//					std::cout
+					//						<< "Channel: " << k << " OldX: " <<
+					// oldX
+					//						<< " State: " << coders[k].x << " "
+					//						<< u32(this->coders[k].partialBits)
+					//<< " Partial: "
+					//						<<
+					// std::bitset<16>(this->coders[k].partial)
+					//<<
+					//"\n";
 					if(cur.last)
 					{
 						this->lastChannel = k;
@@ -232,23 +242,137 @@ namespace ANS
 						break;
 					}
 				}
-				mergeChannels(out, meta, hadLast);
+				this->mergeChannels(out, meta, hadLast);
+				//				std::cout << "Master: " << this->master.x << " "
+				//						  <<
+				// std::bitset<16>(this->master.partial)
+				//<<
+				//"
+				//"
+				//						  << (u32) this->master.partialBits <<
+				// std::endl;
 				if(hadLast) break;
 			}
 		}
 
-		DecompressResult
-		decompressImpl(backend::stream<StateT>& out,
-					   backend::stream<Meta>& meta,
-					   backend::stream<MessageT>& message) const
+		void redistribute(StateT& newd, StateT& d, u8 available, u8 lowerAmnt)
 		{
-			return false;
+			auto negShift =
+				std::min((u8)(this->allBitsRemaining - lowerAmnt), available);
+			d |= (newd & MASK(negShift)) << lowerAmnt;
+			newd >>= negShift;
+		}
+
+		void shift(StateT& newd, StateT& d, u8& available, u8& shiftAmount)
+		{
+			d >>= shiftAmount;
+			available -= shiftAmount;
+			this->redistribute(
+				newd, d, available, this->allBitsRemaining - shiftAmount);
+		}
+
+		void initDecoders(Meta& meta)
+		{
+			for(u32 i = 0; i < this->channelCount; i++)
+			{
+				StateT channelState = meta.controlState[i];
+				State& a			= coders[i];
+				a.x					= channelState;
+			}
+		}
+
+		DecompressResult decompressImpl(backend::stream<StateT>& data,
+										backend::stream<Meta>& meta,
+										backend::stream<MessageT>& message)
+		{
+			StateT read			= 0;
+			auto& curVal		= master.partial;
+			auto& availableBits = master.partialBits;
+
+			while(!data.empty() || availableBits > 0)
+			{
+				State& curDec = this->coders[this->lastChannel];
+
+				if(!data.empty() && availableBits < this->allBitsRemaining)
+				{
+					read = data.read();
+					this->redistribute(read,
+									   curVal,
+									   availableBits + this->allBitsRemaining,
+									   availableBits);
+					availableBits += this->allBitsRemaining;
+				}
+
+				// auto bs = std::bitset<16>(curVal);
+				// auto oldX = curDec.x;
+				if(this->ansTable.nbBitsDelta(curDec.x) > availableBits)
+				{
+					if(data.empty())
+					{
+						//		std::cout << "NEXT BLOCK\n";
+						break;
+					} else
+						throw std::runtime_error("Decompression went booboo");
+				}
+				curDec.partialBits = this->ansTable.nbBitsDelta(curDec.x);
+				reverseMsg.push_back(this->ansTable.states(curDec.x));
+				curDec.x = this->ansTable.newX(curDec.x);
+
+				curDec.partial = curVal & MASK(curDec.partialBits);
+				// std::cout << "Channel: " << this->lastChannel << " NewState:
+				// "
+				//		  << curDec.x + this->ansTable.tableSize()
+				//		  << " State: " << oldX + this->ansTable.tableSize()
+				//		  << " " << u32(curDec.partialBits)
+				//		  << " Partial: " << std::bitset<16>(curDec.partial)
+				//		  << " " << bs << " " << u32(availableBits)
+				//		  << std::endl;
+				curDec.x = curDec.x + curDec.partial;
+				this->shift(read, curVal, availableBits, curDec.partialBits);
+
+				if(this->lastChannel == 0)
+					this->lastChannel = this->channelCount;
+				this->lastChannel--;
+			}
+
+			auto size = reverseMsg.size();
+			for(auto it = this->reverseMsg.rbegin();
+				it != this->reverseMsg.rend();
+				it++)
+			{
+				message << *it;
+			}
+
+			this->reverseMsg.clear();
+
+			return size;
+		}
+
+		Meta createMeta() { return Meta(this->channelCount); }
+
+		template <typename Archive>
+		void save(Archive& ar) const
+		{
+			ar(this->channelCount,
+			   this->ansTable,
+			   this->lastChannel,
+			   this->master,
+			   this->deadBits);
 		}
 
 		template <typename Archive>
-		void serialize(Archive& ar)
+		void load(Archive& ar)
 		{
-			ar(this->ansTable, this->lastChannel);
+			ar(this->channelCount,
+			   this->ansTable,
+			   this->lastChannel,
+			   this->master,
+			   this->deadBits);
+			this->master.partial >>= this->master.partialBits;
+			this->master.partialBits =
+				this->allBitsRemaining - this->master.partialBits;
+			this->resetDecompressBuffer();
+			this->coders.resize(this->channelCount);
 		}
 	};
 } // namespace ANS

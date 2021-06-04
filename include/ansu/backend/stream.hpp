@@ -13,5 +13,11 @@ namespace ANS
 	{
 		template <typename T>
 		using side_stream = stream<side<T>>;
-	}
+
+		/**
+		 * count - number of elements, not bytes
+		 */
+		template <typename T>
+		stream<T> streamFromBuffer(T* buf, u64 count);
+	} // namespace backend
 } // namespace ANS

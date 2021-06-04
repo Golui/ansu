@@ -1,3 +1,9 @@
 [submodule "lib/cereal"]
 	path = lib/cereal
 	url = https://github.com/USCiLab/cereal.git
+[submodule "lib/fallocate"]
+	path = cli/lib/fallocate
+	url = https://github.com/Cyberax/fallocate
+[submodule "lib/mio"]
+	path = cli/lib/mio
+	url = https://github.com/mandreyel/mio

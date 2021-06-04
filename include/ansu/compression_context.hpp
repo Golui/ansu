@@ -21,13 +21,17 @@ namespace ANS
 		// Checkpoint every checkpointFrequency state emissions onto the stream.
 		u64 _checkpointFrequency = CHECKPOINT;
 		u64 checkpointCounter	 = 0;
+		u64 _chunkSize			 = AVG_MESSAGE_LENGTH;
 
 	public:
-		using DecompressResult					   = bool;
-		using StateT							   = typename Table::StateT;
-		using MessageT							   = typename Table::MessageT;
-		using TableT							   = Table;
-		constexpr static const u8 allBitsRemaining = (sizeof(StateT) << 3);
+		using DecompressResult = u64;
+		using StateT		   = typename Table::StateT;
+		using MessageT		   = typename Table::MessageT;
+		using TableT		   = Table;
+		// NB We can't alias Meta to ImplFullT, because the type is not defined
+		// yet!
+
+		u8 allBitsRemaining = (sizeof(StateT) << 3);
 
 		u64 checkpointFrequency() { return this->_checkpointFrequency; }
 
@@ -37,14 +41,16 @@ namespace ANS
 			this->checkpointCounter	   = 0;
 		}
 
-		void initialize() { ((ImplFullT*) (this))->initializeImpl(); }
+		u64 chunkSize() { return this->_chunkSize; }
+
+		void setChunkSize(u64 n) { this->_chunkSize = n; }
+
+		void reset() { ((ImplFullT*) (this))->resetImpl(); }
 
 		template <typename Meta>
-		void flush(backend::stream<StateT>& out,
-				   backend::stream<Meta>& meta,
-				   u32 padding)
+		void loadState()
 		{
-			((ImplFullT*) (this))->flushImpl(out, meta, padding);
+			((ImplFullT*) (this))->loadStateImpl();
 		}
 
 		template <typename Meta,
@@ -60,16 +66,10 @@ namespace ANS
 		template <typename Meta>
 		DecompressResult decompress(backend::stream<StateT>& out,
 									backend::stream<Meta>& meta,
-									backend::stream<StateT>& message) const
+									backend::stream<MessageT>& message) const
 		{
 			return ((ImplFullT*) (this))->decompressImpl(out, meta, message);
 		}
-
-		//		template <typename Archive>
-		//		void serialize(Archive& ar)
-		//		{
-		//			return ((ImplFullT*) (this))->serializeImpl(ar);
-		//		}
 	};
 
 } // namespace ANS

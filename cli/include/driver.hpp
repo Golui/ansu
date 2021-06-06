@@ -17,9 +17,11 @@ namespace ANS
 			{
 				std::string inFilePath;
 				std::string outFilePath;
-				u64 checkpoint = CHECKPOINT;
-				u32 channels   = CHANNEL_COUNT;
-				u64 chunkSize  = AVG_MESSAGE_LENGTH;
+				u64 checkpoint			  = CHECKPOINT;
+				u32 channels			  = CHANNEL_COUNT;
+				u64 chunkSize			  = AVG_MESSAGE_LENGTH;
+				std::string tableFilePath = "";
+				bool printSummary		  = false;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;
@@ -42,5 +44,19 @@ namespace ANS
 			void subRegister(CLI::App& app);
 			int run(OptionsP opts);
 		} // namespace decompress
+
+		namespace generate
+		{
+			struct Options
+			{
+				std::string inFilePath;
+				std::string outFilePath;
+			};
+
+			using OptionsP = std::shared_ptr<Options>;
+
+			void subRegister(CLI::App& app);
+			int run(OptionsP opts);
+		} // namespace generate
 	}	  // namespace driver
 } // namespace ANS

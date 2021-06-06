@@ -11,6 +11,7 @@ int main(int argc, char const* argv[])
 	std::string str = "NOPE";
 	ANS::driver::compress::subRegister(app);
 	ANS::driver::decompress::subRegister(app);
+	ANS::driver::generate::subRegister(app);
 	app.require_subcommand(1);
 
 	try

@@ -1,6 +1,8 @@
 #include "ansu.hpp"
+#include "data/table_generator.hpp"
 #include "driver.hpp"
 #include "io/archive.hpp"
+#include "io/table_archive.hpp"
 
 #include <array>
 #include <chrono>
@@ -8,9 +10,6 @@
 #include <iostream>
 #include <stdexcept>
 #include <stdio.h>
-
-using InDataT  = ANS::backend::side<message_t>;
-using ContextT = ANS::ChannelCompressionContext<ANS::StaticCompressionTable>;
 
 template <typename T>
 std::streamsize getFileSize(T& file)
@@ -24,20 +23,19 @@ std::streamsize getFileSize(T& file)
 	return length;
 }
 
-// TODO efficiency
-int ANS::driver::compress::run(OptionsP opts)
+template <typename ContextT>
+int compressTask(ANS::driver::compress::OptionsP opts,
+				 std::istream& in,
+				 std::shared_ptr<ContextT> mainCtxPtr)
 {
 	using StateT   = typename ContextT::StateT;
-	using MessageT = typename ContextT::MessageT;
+	using MessageT = u8; // typename ContextT::MessageT;
 	using Meta	   = typename ContextT::Meta;
-
-	std::ifstream in(opts->inFilePath,
-					 std::ios::binary); // Stream nas interesujacy
+	using InDataT  = ANS::backend::side<MessageT>;
 
 	auto inSize = getFileSize(in);
 
-	auto mainCtxPtr = std::make_shared<ContextT>(opts->channels);
-	auto& mainCtx	= *mainCtxPtr;
+	auto& mainCtx = *mainCtxPtr;
 
 	mainCtx.setCheckpointFrequency(opts->checkpoint);
 	mainCtx.setChunkSize(opts->chunkSize);
@@ -56,12 +54,15 @@ int ANS::driver::compress::run(OptionsP opts)
 	ANS::backend::stream<StateT> out;
 	ANS::backend::stream<Meta> ometa;
 
-	u32 j = 0;
+	u32 j			= 0;
+	u64 dataWritten = 0;
 	while(in.peek() != EOF)
 	{
 		u32 i = 0;
 
-		in.read((char*) msgbuf, opts->chunkSize * sizeof(message_t));
+		in.read((std::fstream::char_type*) msgbuf,
+				opts->chunkSize * sizeof(MessageT)
+					/ sizeof(std::fstream::char_type));
 		u64 read = in.gcount();
 
 		for(decltype(read) k = 0; k < read; k++)
@@ -69,7 +70,7 @@ int ANS::driver::compress::run(OptionsP opts)
 			counts[((u8*) msgbuf)[k]]++;
 		}
 
-		if(read != opts->chunkSize * sizeof(message_t) || in.peek() == EOF)
+		if(read != opts->chunkSize * sizeof(MessageT) || in.peek() == EOF)
 		{
 			for(; i < read - 1; i++) { msg << InDataT(msgbuf[i]); }
 			auto last = InDataT(msgbuf[i]);
@@ -87,8 +88,9 @@ int ANS::driver::compress::run(OptionsP opts)
 				statebuf[j] = out.read();
 			if(!ometa.empty())
 			{
-				Meta meta = ometa.read();
-				/*auto result =*/writer.writeBlock(j, statebuf, meta);
+				Meta meta	= ometa.read();
+				auto result = writer.writeBlock(j, statebuf, meta);
+				dataWritten += result;
 				//				std::cout << "Wrote " << result << " bytes.\n";
 
 				j = 0;
@@ -98,8 +100,10 @@ int ANS::driver::compress::run(OptionsP opts)
 
 	if(!ometa.empty())
 	{
-		Meta meta = ometa.read();
-		/*auto result =*/writer.writeBlock(0, statebuf, meta);
+		Meta meta	= ometa.read();
+		auto result = writer.writeBlock(0, statebuf, meta);
+		//		std::cout << "Wrote " << result << " bytes.\n";
+		dataWritten += result;
 		if(!ometa.empty()) std::runtime_error("Too many meta objects!");
 	}
 
@@ -123,26 +127,68 @@ int ANS::driver::compress::run(OptionsP opts)
 			entropy -= count / double(sum) * (log2(count / double(sum)));
 	}
 
-	std::cout << std::setprecision(6);
-	std::cout << "Done! Took " << timeS << "s \n";
-	std::cout << "Stats:"
-			  << "\n";
-	std::cout << "\t"
-			  << "Input size:       " << inSize << "\n";
-	std::cout << "\t"
-			  << "Output size:      " << outSize << "\n";
-	std::cout << "\t"
-			  << "Ratio:            " << 100.0 * outSize / ((double) inSize)
-			  << "%"
-			  << "\n";
-	std::cout << "\t"
-			  << "Theoretical best: " << entropy * 12.5 << "%"
-			  << "\n";
-	std::cout << "\t"
-			  << "Entropy:          " << entropy << " bits/symbol\n";
+	if(opts->printSummary)
+	{
+		std::cout << std::setprecision(6);
+		std::cout << "Done! Took " << timeS << "s \n";
+		std::cout << "Stats:"
+				  << "\n";
+		std::cout << "\t"
+				  << "Input size:       " << inSize << "\n";
+		std::cout << "\t"
+				  << "Output size:      " << outSize << "\n";
+		std::cout << "\t\t"
+				  << "Header size:      " << writer.getHeader().totalHeaderSize
+				  << "\n";
+		std::cout << "\t\t"
+				  << "Data size:      "
+				  << dataWritten * sizeof(std::fstream::char_type) << "\n";
+		std::cout << "\t"
+				  << "Ratio:            " << 100.0 * outSize / ((double) inSize)
+				  << "%"
+				  << "\n";
+		std::cout << "\t"
+				  << "Theoretical best: " << entropy * 12.5 << "%"
+				  << "\n";
+		std::cout << "\t"
+				  << "Entropy:          " << entropy << " bits/symbol\n";
+	}
 
 	delete[] msgbuf;
 	delete[] statebuf;
+
+	return 0;
+}
+
+// TODO efficiency
+int ANS::driver::compress::run(OptionsP opts)
+{
+	std::ifstream in(opts->inFilePath, std::ios::binary);
+
+	if(opts->tableFilePath == "static")
+	{
+		using ContextT =
+			ANS::ChannelCompressionContext<ANS::StaticCompressionTable>;
+		auto mainCtxPtr = std::make_shared<ContextT>(opts->channels);
+		return compressTask(opts, in, mainCtxPtr);
+	} else
+	{
+		using TableT   = ANS::DynamicCompressionTable<>;
+		using ContextT = ANS::ChannelCompressionContext<TableT>;
+		TableT table;
+		if(opts->tableFilePath == "")
+		{
+			auto tablGenOpts = TableGeneratorOptions();
+			table			 = ANS::generateTable<u32, u32>(in, tablGenOpts);
+		} else
+		{
+			std::ifstream tableFile(opts->tableFilePath);
+			table = ANS::io::loadTable(tableFile);
+		}
+		in.seekg(0, std::ios_base::beg);
+		auto mainCtxPtr = std::make_shared<ContextT>(opts->channels, table);
+		return compressTask(opts, in, mainCtxPtr);
+	}
 
 	return 0;
 }

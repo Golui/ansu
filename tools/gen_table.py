@@ -9,6 +9,8 @@ import struct
 import tempfile
 import os
 
+import pdb
+
 # Adapted from https://github.com/JarekDuda/AsymmetricNumeralSystemsToolkit/blob/master/ANStoolkit.cpp
 
 
@@ -23,6 +25,8 @@ class ANS:
 		self.tsl = table_size_log
 		self.quantize = self._quantize_fast
 		self.spread = self._spread_fast
+
+		pdb.set_trace()
 
 		self.quantize()
 		self.spread()
@@ -50,6 +54,8 @@ class ANS:
 				maxv = p
 				maxp = i
 		self.q[maxp] += self.ts - used
+		if self.q[maxp] <= 0:
+			raise RuntimeError("Inaccurate quantizer")
 
 	# Spread symbols and create nbits.
 	def _spread_fast(self):
@@ -106,7 +112,7 @@ class ANS:
 			symbols = sorted(set(message))
 
 		out = ""
-		x, _ = self.encode_single(1024, symbols.index(message[0]))
+		x = 1024
 		# x = self.encoding_table[0]
 		for s in message:
 			sindex = symbols.index(s)
@@ -129,7 +135,7 @@ class ANS:
 			out.append(symbols[self.states[x]])
 			oldX = x
 			x = new_x + int(stream[-nb_bits:], 2)
-			print(oldX + self.ts, x + self.ts, nb_bits, stream[-nb_bits:])
+			print(oldX + self.ts, x + self.ts, nb_bits, stream[-nb_bits:], int(stream[-nb_bits:], 2))
 			stream = stream[:-nb_bits]
 		return out[::-1]
 

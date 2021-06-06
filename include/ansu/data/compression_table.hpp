@@ -4,6 +4,8 @@
 #include "ints.hpp"
 #include "util.hpp"
 
+#include <vector>
+
 namespace ANS
 {
 	namespace tables
@@ -14,6 +16,17 @@ namespace ANS
 			Dynamic
 		};
 	} // namespace tables
+
+	namespace __internal
+	{
+		// Store the compression table as u32's for now
+		template <typename Archive, typename Vector>
+		void asVectorU32(Archive& arch, Vector& vec)
+		{
+			arch(std::vector<u32>(vec.begin(), vec.end()));
+		}
+
+	} // namespace __internal
 
 	template <typename _StateT, typename _MessageT>
 	struct CompressionTable
@@ -28,6 +41,7 @@ namespace ANS
 		constexpr static u32 mesessageWidth = sizeof(_MessageT) << 3;
 
 		using StateT		 = _StateT;
+		using StateDeltaT	 = s32;
 		using MessageT		 = _MessageT;
 		using EncodingTableT = StateT;
 		using MessageIndexT	 = u32;
@@ -52,12 +66,9 @@ namespace ANS
 		virtual EncodingTableT encodingTable(StateT index) const = 0;
 		virtual NbBitsDeltaT nbBitsDelta(StateT index) const	 = 0;
 		virtual NbBitsT nb(StateT index) const					 = 0;
-		virtual StateT start(MessageIndexT index) const			 = 0;
+		virtual StateDeltaT start(MessageIndexT index) const	 = 0;
 		virtual StateT adjStart(MessageIndexT index) const		 = 0;
-
-		template <typename Archive>
-		void serialize(Archive& ar)
-		{}
+		virtual MessageT alphabet(MessageIndexT index) const	 = 0;
 
 		virtual ~CompressionTable() {}
 	};
@@ -69,53 +80,108 @@ namespace ANS
 	{
 		using Base			 = CompressionTable<_StateT, _MessageT>;
 		using StateT		 = typename Base::StateT;
+		using StateDeltaT	 = typename Base::StateDeltaT;
 		using MessageT		 = typename Base::MessageT;
 		using MessageIndexT	 = typename Base::MessageIndexT;
 		using EncodingTableT = typename Base::EncodingTableT;
 		using NbBitsDeltaT	 = typename Base::NbBitsDeltaT;
 		using NbBitsT		 = typename Base::NbBitsT;
 
+		struct Data
+		{
+			std::vector<StateT> states				  = {0};
+			std::vector<StateT> newX				  = {0};
+			std::vector<EncodingTableT> encodingTable = {0};
+			std::vector<NbBitsDeltaT> nbBitsDelta	  = {0};
+			std::vector<NbBitsT> nb					  = {0};
+			std::vector<StateDeltaT> start			  = {0};
+			std::vector<StateT> adjStart			  = {0};
+			std::vector<MessageT> alphabet			  = {0};
+
+			template <typename Archive>
+			void save(Archive& ar) const
+			{
+				using namespace __internal;
+				asVectorU32(ar, this->states);
+				asVectorU32(ar, this->newX);
+				asVectorU32(ar, this->encodingTable);
+				asVectorU32(ar, this->nbBitsDelta);
+				asVectorU32(ar, this->nb);
+				asVectorU32(ar, this->start);
+				asVectorU32(ar, this->adjStart);
+				asVectorU32(ar, this->alphabet);
+			}
+
+			template <typename Archive>
+			void load(Archive& ar)
+			{
+				ar(this->states,
+				   this->newX,
+				   this->encodingTable,
+				   this->nbBitsDelta,
+				   this->nb,
+				   this->start,
+				   this->adjStart,
+				   this->alphabet);
+			}
+		};
+
 	private:
-		std::vector<StateT> _states				   = {0};
-		std::vector<StateT> _newX				   = {0};
-		std::vector<EncodingTableT> _encodingTable = {0};
-		std::vector<NbBitsDeltaT> _nbBitsDelta	   = {0};
-		std::vector<NbBitsT> _nb				   = {0};
-		std::vector<StateT> _start				   = {0};
-		std::vector<StateT> _adjStart			   = {0};
+		Data data;
 
 	public:
 		DynamicCompressionTable() : Base() {}
 
-		DynamicCompressionTable(u32 alphabetSize, u32 tableSizeLog)
-			: Base(alphabetSize, tableSizeLog)
+		DynamicCompressionTable(u32 alphabetSize,
+								u32 tableSizeLog,
+								Data dt = Data())
+			: Base(alphabetSize, tableSizeLog), data(dt)
 		{}
 
 		virtual tables::Type type() const override { return tables::Dynamic; }
 
-		virtual MessageT states(StateT index) const { return _states[index]; }
-		virtual StateT newX(StateT index) const { return _newX[index]; }
+		virtual MessageT states(StateT index) const
+		{
+			return data.states[index];
+		}
+		virtual StateT newX(StateT index) const { return data.newX[index]; }
 
 		virtual EncodingTableT encodingTable(StateT index) const
 		{
-			return _encodingTable[index];
+			return data.encodingTable[index];
 		}
 
 		virtual NbBitsDeltaT nbBitsDelta(StateT index) const
 		{
-			return _nbBitsDelta[index];
+			return data.nbBitsDelta[index];
 		}
 
-		virtual NbBitsT nb(StateT index) const { return _nb[index]; }
+		virtual NbBitsT nb(StateT index) const { return data.nb[index]; }
 
-		virtual StateT start(MessageIndexT index) const
+		virtual StateDeltaT start(MessageIndexT index) const
 		{
-			return _start[index];
+			return data.start[index];
 		}
 
 		virtual StateT adjStart(MessageIndexT index) const
 		{
-			return _adjStart[index];
+			return data.adjStart[index];
+		}
+
+		virtual MessageT alphabet(MessageIndexT index) const
+		{
+			// Do bounds checking
+			return data.alphabet.at(index);
+		}
+
+		void setData(Data dt) { this->data = dt; }
+
+		template <typename Archive>
+		void serialize(Archive& ar)
+		{
+			ar(this->_alphabetSize, this->_tableSizeLog);
+			this->_tableSize = 1 << this->_tableSizeLog;
+			ar(this->data);
 		}
 	};
 
@@ -125,6 +191,7 @@ namespace ANS
 
 	public:
 		using StateT		 = typename Base::StateT;
+		using StateDeltaT	 = typename Base::StateDeltaT;
 		using MessageT		 = typename Base::MessageT;
 		using MessageIndexT	 = typename Base::MessageIndexT;
 		using EncodingTableT = typename Base::EncodingTableT;
@@ -160,7 +227,7 @@ namespace ANS
 			return StaticTable::nb[index];
 		}
 
-		virtual StateT start(MessageIndexT index) const override
+		virtual StateDeltaT start(MessageIndexT index) const override
 		{
 			return StaticTable::start[index];
 		}
@@ -168,6 +235,12 @@ namespace ANS
 		virtual StateT adjStart(MessageIndexT index) const override
 		{
 			return StaticTable::adj_start[index];
+		}
+
+		virtual MessageT alphabet(MessageIndexT index) const
+		{
+			// Do bounds checking
+			return index;
 		}
 
 		template <typename Archive>

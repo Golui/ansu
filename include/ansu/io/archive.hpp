@@ -6,7 +6,6 @@
 #include "io/serialization.hpp"
 
 #include <array>
-#include <cereal/archives/binary.hpp>
 #include <cereal/cereal.hpp>
 #include <exception>
 #include <fstream>
@@ -200,6 +199,8 @@ namespace ANS
 				return this->fileHandle.tellg() - pos;
 			}
 
+			const SharedHeader getHeader() { return this->header; }
+
 			~ArchiveWriter()
 			{
 				auto pos = this->fileHandle.tellp();
@@ -294,15 +295,15 @@ namespace ANS
 				Meta m;
 				this->inArchive(m);
 				meta << m;
-				//	std::cout << " THS: " << this->header.totalHeaderSize
-				//			  << " Block: " << blockNumber
-				//			  << " Offset: " << dataReadOffset
-				//			  << " BS: " << blockData << " Read: "
-				//			  << (this->fileHandle.tellg() - dataReadOffset)
-				//			  << " bytes. "
-				//			  << " Meta had " << m.channels << " ("
-				//			  << m.controlState.size() << ") channels" <<
-				// std::endl;
+				//		std::cout << " THS: " << this->header.totalHeaderSize
+				//				  << " Block: " << blockNumber
+				//				  << " Offset: " << dataReadOffset
+				//				  << " BS: " << blockData << " Read: "
+				//				  << (this->fileHandle.tellg() - dataReadOffset)
+				//				  << " bytes. "
+				//				  << " Meta had " << m.channels << " ("
+				//				  << m.controlState.size() << ") channels" <<
+				//std::endl;
 				return read * charSize / (this->header.dataTypeWidth >> 3);
 			}
 		};

@@ -13,7 +13,7 @@
 #	include <iostream>
 #endif
 
-#define MASK(b) ((1 << b) - 1)
+#define MASK(b) ((1L << (b)) - 1)
 
 namespace ANS
 {
@@ -80,8 +80,8 @@ namespace ANS
 			}
 		};
 
-		Table ansTable;
 		u32 channelCount;
+		Table ansTable;
 		Container<State> coders;
 		u32 lastChannel;
 		State master;
@@ -90,13 +90,12 @@ namespace ANS
 
 	private:
 	public:
-		ChannelCompressionContext(u32 channelCount = 2)
-			: channelCount(channelCount)
+		ChannelCompressionContext(u32 channelCount = 2, Table tbl = Table())
+			: channelCount(channelCount), ansTable(tbl)
 		{
 			this->coders = Container<State>(this->channelCount);
 			this->resetImpl();
 		}
-
 		void resetDecompressBuffer()
 		{
 			reverseMsg.reserve((u64)(this->_checkpointFrequency / 0.6));
@@ -122,7 +121,8 @@ namespace ANS
 				resetEncoding(this->coders[i]);
 			}
 			resetEncodingMaster(master);
-			this->reverseMsg = Container<MessageT>();
+			this->reverseMsg  = Container<MessageT>();
+			this->lastChannel = 0;
 		}
 
 		void encodeSingle(State& s, MessageT current)
@@ -202,11 +202,6 @@ namespace ANS
 			if(hadLast) emitMeta();
 		}
 
-		// TODO New plan: Implement side channel data with ap_axis or similar,
-		// use Vivado header libraries. Write meta on writing the final state
-		// onto the stream. No need for requesting the meta - it will be written
-		// if we trigger the last element from the side channel!
-
 		template <typename T>
 		void compressImpl(backend::side_stream<T>& message,
 						  backend::stream<StateT>& out,
@@ -222,18 +217,19 @@ namespace ANS
 					u32 k = j + this->lastChannel;
 					if(k >= this->channelCount) k -= this->channelCount;
 					auto cur = message.read();
-					//					auto oldX = this->coders[k].x;
+					// auto oldX = this->coders[k].x;
 					this->encodeSingle(this->coders[k],
-									   reinterpret_cast<MessageT>(cur.data));
-					//					std::cout
-					//						<< "Channel: " << k << " OldX: " <<
-					// oldX
-					//						<< " State: " << coders[k].x << " "
-					//						<< u32(this->coders[k].partialBits)
-					//<< " Partial: "
-					//						<<
-					// std::bitset<16>(this->coders[k].partial)
-					//<<
+									   static_cast<MessageT>(cur.data));
+					//		std::cout << k << " " << oldX << " " << coders[k].x
+					//<< " "
+					//				  << std::endl;
+					//		std::cout
+					//			<< "Channel: " << k << " OldX: " << oldX
+					//			<< " State: " << coders[k].x << " "
+					//			<< u32(this->coders[k].partialBits) << "
+					// Partial:
+					//"
+					//			<< std::bitset<16>(this->coders[k].partial) <<
 					//"\n";
 					if(cur.last)
 					{
@@ -243,24 +239,28 @@ namespace ANS
 					}
 				}
 				this->mergeChannels(out, meta, hadLast);
-				//				std::cout << "Master: " << this->master.x << " "
-				//						  <<
-				// std::bitset<16>(this->master.partial)
-				//<<
-				//"
-				//"
-				//						  << (u32) this->master.partialBits <<
-				// std::endl;
+				//	std::cout << "Master: " << this->master.x << " "
+				//			  << std::bitset<32>(this->master.partial) << " "
+				//			  << (u32) this->master.partialBits << std::endl;
 				if(hadLast) break;
 			}
 		}
 
 		void redistribute(StateT& newd, StateT& d, u8 available, u8 lowerAmnt)
 		{
-			auto negShift =
-				std::min((u8)(this->allBitsRemaining - lowerAmnt), available);
-			d |= (newd & MASK(negShift)) << lowerAmnt;
-			newd >>= negShift;
+			// In C++ a n-bit bitshift has undefined behaviour on an n bit type
+			// So, we have a special case here...
+			if(available == this->allBitsRemaining && lowerAmnt == 0)
+			{
+				d	 = newd;
+				newd = 0;
+			} else
+			{
+				auto negShift = std::min(
+					(u8)(this->allBitsRemaining - lowerAmnt), available);
+				d |= (newd & MASK(negShift)) << lowerAmnt;
+				newd >>= negShift;
+			}
 		}
 
 		void shift(StateT& newd, StateT& d, u8& available, u8& shiftAmount)
@@ -289,7 +289,11 @@ namespace ANS
 			auto& curVal		= master.partial;
 			auto& availableBits = master.partialBits;
 
-			while(!data.empty() || availableBits > 0)
+			u32 loopCount = 0;
+			bool isNextJustStateChange =
+				this->ansTable.nbBitsDelta(this->coders[this->lastChannel].x)
+				== 0;
+			while(!data.empty() || availableBits > 0 || isNextJustStateChange)
 			{
 				State& curDec = this->coders[this->lastChannel];
 
@@ -303,36 +307,60 @@ namespace ANS
 					availableBits += this->allBitsRemaining;
 				}
 
-				// auto bs = std::bitset<16>(curVal);
-				// auto oldX = curDec.x;
-				if(this->ansTable.nbBitsDelta(curDec.x) > availableBits)
+				// auto bs	  = std::bitset<32>(curVal);
+				auto oldX = curDec.x;
+				if(this->ansTable.nbBitsDelta(oldX) > availableBits)
 				{
 					if(data.empty())
 					{
-						//		std::cout << "NEXT BLOCK\n";
+						// std::cout << "NEXT BLOCK\n";
 						break;
 					} else
 						throw std::runtime_error("Decompression went booboo");
 				}
 				curDec.partialBits = this->ansTable.nbBitsDelta(curDec.x);
-				reverseMsg.push_back(this->ansTable.states(curDec.x));
+				reverseMsg.push_back(
+					this->ansTable.alphabet(this->ansTable.states(curDec.x)));
 				curDec.x = this->ansTable.newX(curDec.x);
 
 				curDec.partial = curVal & MASK(curDec.partialBits);
-				// std::cout << "Channel: " << this->lastChannel << " NewState:
-				// "
-				//		  << curDec.x + this->ansTable.tableSize()
-				//		  << " State: " << oldX + this->ansTable.tableSize()
-				//		  << " " << u32(curDec.partialBits)
-				//		  << " Partial: " << std::bitset<16>(curDec.partial)
-				//		  << " " << bs << " " << u32(availableBits)
-				//		  << std::endl;
-				curDec.x = curDec.x + curDec.partial;
+				curDec.x	   = curDec.x + curDec.partial;
+				//		std::cout << this->lastChannel << " "
+				//				  << u32(curDec.x + this->ansTable.tableSize())
+				//<<
+				//"
+				//"
+				//				  << u32(oldX + this->ansTable.tableSize())
+				//				  << std::endl;
+				//	std::cout << "Channel: " << this->lastChannel << " NewState:
+				//"
+				//			  << curDec.x + this->ansTable.tableSize()
+				//			  << " State: " << oldX + this->ansTable.tableSize()
+				//			  << " " << u32(curDec.partialBits)
+				//			  << " Partial: " << std::bitset<16>(curDec.partial)
+				//			  << " " << s32(curDec.partial) << " " << bs << " "
+				//			  << u32(availableBits) << std::endl;
 				this->shift(read, curVal, availableBits, curDec.partialBits);
+
+				// If it just so happens that a state requires zero bits, and
+				// if newX yields the same state for all channels, we will have
+				// an infinite loop on our hands. Here we handle this case.
+				if(curDec.partialBits == 0 && curDec.x == oldX)
+				{
+					loopCount++;
+				} else
+				{
+					loopCount = 0;
+				}
+
+				if(loopCount == this->channelCount) break;
 
 				if(this->lastChannel == 0)
 					this->lastChannel = this->channelCount;
 				this->lastChannel--;
+				isNextJustStateChange = this->ansTable.nbBitsDelta(
+											this->coders[this->lastChannel].x)
+										== 0;
 			}
 
 			auto size = reverseMsg.size();

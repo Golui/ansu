@@ -53,8 +53,19 @@ int decompressTask(mio::mmap_sink& out,
 		}
 		//		std::cout << std::endl;
 		writeOffset -= result;
+		if(writeOffset > head.inputSize)
+		{
+			std::cout << "Underflow in writeOffset. \n";
+			break;
+		}
 		blockNum++;
 	} while((lastRead = reader.readNextBlock(readbuf, meta)));
+
+	if(writeOffset != 0)
+	{
+		std::cout << "Warning: Decompression ended prematurely, at offset "
+				  << writeOffset << std::endl;
+	}
 
 	delete[] readbuf;
 

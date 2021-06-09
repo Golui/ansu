@@ -21,17 +21,18 @@ int decompressTask(mio::mmap_sink& out,
 				   ANS::io::ArchiveReader& reader,
 				   const ANS::io::SharedHeader& head)
 {
-	using ContextT = ANS::ChannelCompressionContext<Table>;
-	using StateT   = typename ContextT::StateT;
-	using MessageT = typename ContextT::MessageT;
-	using Meta	   = typename ContextT::Meta;
+	using ContextT		= ANS::ChannelCompressionContext<Table>;
+	using StateT		= typename ContextT::StateT;
+	using MessageT		= typename ContextT::MessageT;
+	using MessageIndexT = typename ContextT::MessageIndexT;
+	using Meta			= typename ContextT::Meta;
 
 	auto ctx = reader.readContext<ANS::ChannelCompressionContext<Table>>();
 
 	StateT* readbuf = new StateT[head.blockSize];
 
 	ANS::backend::stream<Meta> meta;
-	ANS::backend::stream<MessageT> message;
+	ANS::backend::stream<MessageIndexT> message;
 
 	u32 blockNum = 0;
 	u64 lastRead = 0;
@@ -48,7 +49,7 @@ int decompressTask(mio::mmap_sink& out,
 		writeOffset = writeOffset - result;
 		while(!message.empty())
 		{
-			out[writeOffset++] = message.read() & MASK(8);
+			out[writeOffset++] = ctx.ansTable.alphabet(message.read());
 			//			std::cout << u16(out[writeOffset - 1]) << " ";
 		}
 		//		std::cout << std::endl;

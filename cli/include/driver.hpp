@@ -4,6 +4,7 @@
 #include "ansu/ints.hpp"
 #include "ansu/settings.hpp"
 
+#include <map>
 #include <memory.h>
 
 namespace ANS
@@ -11,6 +12,16 @@ namespace ANS
 	namespace driver
 	{
 		constexpr u64 MAX_BUFFER_SIZE = 256 << 20;
+
+		enum class Alphabet : int
+		{
+			Reduced,
+			Ascii
+		};
+
+		static const std::map<std::string, Alphabet> ALPHABET_STR_TO_ENUM {
+			{"reduced", Alphabet::Reduced}, {"ascii", Alphabet::Ascii}};
+
 		namespace compress
 		{
 			struct Options
@@ -20,6 +31,8 @@ namespace ANS
 				u64 checkpoint			  = CHECKPOINT;
 				u32 channels			  = CHANNEL_COUNT;
 				u64 chunkSize			  = AVG_MESSAGE_LENGTH;
+				Alphabet alphabet		  = Alphabet::Reduced;
+				u32 tableSizeLog		  = 10;
 				std::string tableFilePath = "";
 				bool printSummary		  = false;
 			};

@@ -28,10 +28,11 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 				 std::istream& in,
 				 std::shared_ptr<ContextT> mainCtxPtr)
 {
-	using StateT   = typename ContextT::StateT;
-	using MessageT = u8; // typename ContextT::MessageT;
-	using Meta	   = typename ContextT::Meta;
-	using InDataT  = ANS::backend::side<MessageT>;
+	using StateT		= typename ContextT::StateT;
+	using MessageT		= u8; // typename ContextT::MessageT;
+	using MessageIndexT = typename ContextT::MessageIndexT;
+	using Meta			= typename ContextT::Meta;
+	using InDataT		= ANS::backend::side<MessageIndexT>;
 
 	auto inSize = getFileSize(in);
 
@@ -50,7 +51,7 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 	MessageT* msgbuf			= new MessageT[opts->chunkSize];
 	StateT* statebuf			= new StateT[opts->checkpoint];
 
-	ANS::backend::side_stream<MessageT> msg;
+	ANS::backend::side_stream<MessageIndexT> msg;
 	ANS::backend::stream<StateT> out;
 	ANS::backend::stream<Meta> ometa;
 
@@ -72,13 +73,19 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 
 		if(read != opts->chunkSize * sizeof(MessageT) || in.peek() == EOF)
 		{
-			for(; i < read - 1; i++) { msg << InDataT(msgbuf[i]); }
-			auto last = InDataT(msgbuf[i]);
+			for(; i < read - 1; i++)
+			{
+				msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
+			}
+			auto last = InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
 			last.last = true;
 			msg << last;
 		} else
 		{
-			for(; i < read; i++) { msg << InDataT(msgbuf[i]); }
+			for(; i < read; i++)
+			{
+				msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
+			}
 		}
 		mainCtx.compress(msg, out, ometa);
 
@@ -173,17 +180,32 @@ int ANS::driver::compress::run(OptionsP opts)
 		return compressTask(opts, in, mainCtxPtr);
 	} else
 	{
-		using TableT   = ANS::DynamicCompressionTable<>;
+		using TableT   = ANS::DynamicCompressionTable<u32, u8>;
 		using ContextT = ANS::ChannelCompressionContext<TableT>;
 		TableT table;
 		if(opts->tableFilePath == "")
 		{
-			auto tablGenOpts = TableGeneratorOptions();
-			table			 = ANS::generateTable<u32, u32>(in, tablGenOpts);
+			auto tableGenOpts = TableGeneratorOptions();
+			switch(opts->alphabet)
+			{
+				case ANS::driver::Alphabet::Reduced:
+				{
+					tableGenOpts.useFullAscii = false;
+					break;
+				}
+				case ANS::driver::Alphabet::Ascii:
+				{
+					tableGenOpts.useFullAscii = true;
+					break;
+				}
+				default: break;
+			}
+			tableGenOpts.tableSizeLog = opts->tableSizeLog;
+			table = ANS::generateTable<u32, u8>(in, tableGenOpts);
 		} else
 		{
 			std::ifstream tableFile(opts->tableFilePath);
-			table = ANS::io::loadTable(tableFile);
+			table = ANS::io::loadTable<u32, u8>(tableFile);
 		}
 		in.seekg(0, std::ios_base::beg);
 		auto mainCtxPtr = std::make_shared<ContextT>(opts->channels, table);

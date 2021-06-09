@@ -27,6 +27,7 @@ namespace ANS
 		using DecompressResult = u64;
 		using StateT		   = typename Table::StateT;
 		using MessageT		   = typename Table::MessageT;
+		using MessageIndexT	   = typename Table::MessageIndexT;
 		using TableT		   = Table;
 		// NB We can't alias Meta to ImplFullT, because the type is not defined
 		// yet!
@@ -64,9 +65,10 @@ namespace ANS
 		}
 
 		template <typename Meta>
-		DecompressResult decompress(backend::stream<StateT>& out,
-									backend::stream<Meta>& meta,
-									backend::stream<MessageT>& message) const
+		DecompressResult
+		decompress(backend::stream<StateT>& out,
+				   backend::stream<Meta>& meta,
+				   backend::stream<MessageIndexT>& message) const
 		{
 			return ((ImplFullT*) (this))->decompressImpl(out, meta, message);
 		}

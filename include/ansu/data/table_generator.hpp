@@ -28,7 +28,8 @@ namespace ANS
 
 	struct TableGeneratorOptions
 	{
-		u32 tableSizeLog = 10;
+		u32 tableSizeLog  = 10;
+		bool useFullAscii = false;
 
 		u32 tableSize() { return 1 << this->tableSizeLog; }
 	};
@@ -88,7 +89,8 @@ namespace ANS
 	OccurenceMap<MessageT> generateProbabilities(std::istream& sample)
 	{
 		OccurenceMap<MessageT> result;
-		constexpr auto readWidth = sizeof(u8) / sizeof(std::istream::char_type);
+		constexpr auto readWidth =
+			sizeof(MessageT) / sizeof(std::istream::char_type);
 		while(sample.peek() != EOF)
 		{
 			MessageT symbol;
@@ -108,18 +110,33 @@ namespace ANS
 
 	template <typename MessageT>
 	SampleInformation<MessageT>
-	createSampleInformation(OccurenceMap<MessageT>&& map)
+	createSampleInformation(OccurenceMap<MessageT>&& map,
+							TableGeneratorOptions& opts)
 	{
 		SampleInformation<MessageT> result;
 		typename OccurenceMap<MessageT>::mapped_type sum = 0;
-		result.data.resize(256); // map.size());
-		// auto it = result.data.begin();
-		for(u32 i = 0; i < 256; i++) { result.data[i].symbol = i; }
-		for(auto& entry: map)
+		if(opts.useFullAscii)
 		{
-			result.data[entry.first].symbol = entry.first;
-			sum += entry.second;
+			result.data.resize(256);
+			for(u32 i = 0; i < 256; i++) { result.data[i].symbol = i; }
+			for(auto& entry: map)
+			{
+				result.data[entry.first].symbol = entry.first;
+				sum += entry.second;
+			}
+
+		} else
+		{
+			result.data.resize(map.size());
+			u32 i = 0;
+			for(auto& entry: map)
+			{
+				result.data[i].symbol = entry.first;
+				i++;
+				sum += entry.second;
+			}
 		}
+
 		for(auto& symbol: result.data)
 		{
 			symbol.p = map[symbol.symbol] / (double) sum;
@@ -198,7 +215,7 @@ namespace ANS
 				  TableGeneratorOptions opts)
 	{
 		return generateTable<StateT, MessageT>(
-			createSampleInformation(std::move(occurences)), opts);
+			createSampleInformation(std::move(occurences), opts), opts);
 	}
 
 	template <typename StateT, typename MessageT>

@@ -51,6 +51,13 @@ void ANS::driver::compress::subRegister(CLI::App& app)
 	sub->add_option(
 		"-l", opts->chunkSize, "How much data to consume per function call.");
 
+	sub->add_option(
+		   "-a", opts->alphabet, "The length of the alphabet when generating")
+		->transform(
+			CLI::CheckedTransformer(ALPHABET_STR_TO_ENUM, CLI::ignore_case));
+
+	sub->add_option("-k", opts->tableSizeLog, "Logarithm of the table size.");
+
 	sub->final_callback([opts]() {
 		ANS::driver::compress::run(opts);
 	});

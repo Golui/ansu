@@ -4,6 +4,7 @@
 #include "ints.hpp"
 #include "util.hpp"
 
+#include <unordered_map>
 #include <vector>
 
 namespace ANS
@@ -60,22 +61,23 @@ namespace ANS
 		u32 tableSizeLog() const { return this->_tableSizeLog; };
 		u32 tableSize() const { return this->_tableSize; };
 
-		virtual tables::Type type() const						 = 0;
-		virtual MessageT states(StateT index) const				 = 0;
-		virtual StateT newX(StateT index) const					 = 0;
-		virtual EncodingTableT encodingTable(StateT index) const = 0;
-		virtual NbBitsDeltaT nbBitsDelta(StateT index) const	 = 0;
-		virtual NbBitsT nb(StateT index) const					 = 0;
-		virtual StateDeltaT start(MessageIndexT index) const	 = 0;
-		virtual StateT adjStart(MessageIndexT index) const		 = 0;
-		virtual MessageT alphabet(MessageIndexT index) const	 = 0;
+		virtual tables::Type type() const							 = 0;
+		virtual MessageT states(StateT index) const					 = 0;
+		virtual StateT newX(StateT index) const						 = 0;
+		virtual EncodingTableT encodingTable(StateT index) const	 = 0;
+		virtual NbBitsDeltaT nbBitsDelta(StateT index) const		 = 0;
+		virtual NbBitsT nb(StateT index) const						 = 0;
+		virtual StateDeltaT start(MessageIndexT index) const		 = 0;
+		virtual StateT adjStart(MessageIndexT index) const			 = 0;
+		virtual MessageT alphabet(MessageIndexT index) const		 = 0;
+		virtual MessageIndexT reverseAlphabet(MessageT symbol) const = 0;
 
 		virtual ~CompressionTable() {}
 	};
 
 	// TODO While this is parametrized, we assume the table is always stored as
 	// 32 bit in the archive.
-	template <typename _StateT = u32, typename _MessageT = u32>
+	template <typename _StateT = u32, typename _MessageT = u8>
 	struct DynamicCompressionTable : public CompressionTable<_StateT, _MessageT>
 	{
 		using Base			 = CompressionTable<_StateT, _MessageT>;
@@ -109,7 +111,7 @@ namespace ANS
 				asVectorU32(ar, this->nb);
 				asVectorU32(ar, this->start);
 				asVectorU32(ar, this->adjStart);
-				asVectorU32(ar, this->alphabet);
+				ar(this->alphabet);
 			}
 
 			template <typename Archive>
@@ -128,6 +130,7 @@ namespace ANS
 
 	private:
 		Data data;
+		std::unordered_map<MessageT, MessageIndexT> reverseAlphabetMap;
 
 	public:
 		DynamicCompressionTable() : Base() {}
@@ -174,7 +177,21 @@ namespace ANS
 			return data.alphabet.at(index);
 		}
 
-		void setData(Data dt) { this->data = dt; }
+		virtual MessageIndexT reverseAlphabet(MessageT index) const
+		{
+			return reverseAlphabetMap.at(index);
+		}
+
+		void setData(Data dt)
+		{
+			this->data = dt;
+			u32 i	   = 0;
+			for(auto& symbol: this->data.alphabet)
+			{
+				this->reverseAlphabetMap[symbol] = i;
+				i++;
+			}
+		}
 
 		template <typename Archive>
 		void serialize(Archive& ar)
@@ -182,6 +199,7 @@ namespace ANS
 			ar(this->_alphabetSize, this->_tableSizeLog);
 			this->_tableSize = 1 << this->_tableSizeLog;
 			ar(this->data);
+			this->setData(this->data);
 		}
 	};
 
@@ -237,9 +255,13 @@ namespace ANS
 			return StaticTable::adj_start[index];
 		}
 
-		virtual MessageT alphabet(MessageIndexT index) const
+		virtual MessageT alphabet(MessageIndexT index) const override
 		{
-			// Do bounds checking
+			return index;
+		}
+
+		virtual MessageIndexT reverseAlphabet(MessageT index) const override
+		{
 			return index;
 		}
 

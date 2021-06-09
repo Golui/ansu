@@ -27,10 +27,11 @@ namespace ANS
 		using BaseT =
 			CompressionContext<ChannelCompressionContext, _Table, Container>;
 
-		using Table	   = _Table;
-		using StateT   = typename Table::StateT;
-		using MessageT = typename Table::MessageT;
-		using NbBitsT  = typename Table::NbBitsT;
+		using Table			= _Table;
+		using StateT		= typename Table::StateT;
+		using MessageT		= typename Table::MessageT;
+		using MessageIndexT = typename Table::MessageIndexT;
+		using NbBitsT		= typename Table::NbBitsT;
 		template <typename... T>
 		using ContainerT = Container<T...>;
 
@@ -85,7 +86,7 @@ namespace ANS
 		Container<State> coders;
 		u32 lastChannel;
 		State master;
-		Container<MessageT> reverseMsg;
+		Container<MessageIndexT> reverseMsg;
 		u8 deadBits;
 
 	private:
@@ -121,7 +122,7 @@ namespace ANS
 				resetEncoding(this->coders[i]);
 			}
 			resetEncodingMaster(master);
-			this->reverseMsg  = Container<MessageT>();
+			this->reverseMsg  = Container<MessageIndexT>();
 			this->lastChannel = 0;
 		}
 
@@ -283,7 +284,7 @@ namespace ANS
 
 		DecompressResult decompressImpl(backend::stream<StateT>& data,
 										backend::stream<Meta>& meta,
-										backend::stream<MessageT>& message)
+										backend::stream<MessageIndexT>& message)
 		{
 			StateT read			= 0;
 			auto& curVal		= master.partial;
@@ -319,8 +320,7 @@ namespace ANS
 						throw std::runtime_error("Decompression went booboo");
 				}
 				curDec.partialBits = this->ansTable.nbBitsDelta(curDec.x);
-				reverseMsg.push_back(
-					this->ansTable.alphabet(this->ansTable.states(curDec.x)));
+				reverseMsg.push_back(this->ansTable.states(curDec.x));
 				curDec.x = this->ansTable.newX(curDec.x);
 
 				curDec.partial = curVal & MASK(curDec.partialBits);

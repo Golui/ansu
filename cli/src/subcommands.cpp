@@ -19,12 +19,13 @@ void ANS::driver::compress::subRegister(CLI::App& app)
 
 	auto opts = std::make_shared<Options>();
 
-	sub->add_option("infile", opts->inFilePath, "the file to compress")
-		->required()
+	sub->add_option("-f,--infile",
+					opts->inFilePath,
+					"the file to compress. Use \"STDIN\" to capture data from "
+					"the standard input.")
 		->check(SpecialValidator() | CLI::ExistingFile);
 
-	sub->add_option("outfile", opts->outFilePath, "the resultin archive")
-		->required();
+	sub->add_option("-o,--outfile", opts->outFilePath, "the resulting archive");
 
 	sub->add_option(
 		"-t",
@@ -91,12 +92,20 @@ void ANS::driver::generate::subRegister(CLI::App& app)
 
 	auto opts = std::make_shared<Options>();
 
-	sub->add_option(
-		   "infile", opts->inFilePath, "the file to generate the table for.")
-		->required()
-		->check(CLI::ExistingFile);
+	sub->add_option("-f,--infile",
+					opts->inFilePath,
+					"the file to compress. Use \"STDIN\" to capture data from "
+					"the standard input.")
+		->check(SpecialValidator() | CLI::ExistingFile);
 
-	sub->add_option("outfile", opts->outFilePath, "the table file")->required();
+	sub->add_option("-o,--outfile", opts->outFilePath, "the resulting archive");
+
+	sub->add_option(
+		   "-a", opts->alphabet, "The length of the alphabet when generating")
+		->transform(
+			CLI::CheckedTransformer(ALPHABET_STR_TO_ENUM, CLI::ignore_case));
+
+	sub->add_option("-k", opts->tableSizeLog, "Logarithm of the table size.");
 
 	sub->final_callback([opts]() {
 		ANS::driver::generate::run(opts);

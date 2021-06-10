@@ -135,7 +135,6 @@ namespace ANS
 		{
 			cereal::BinaryOutputArchive outArchive;
 			bool hasHeader = false;
-			SharedHeader header;
 			std::shared_ptr<ContextT> context;
 
 			void writeHeader()
@@ -148,6 +147,7 @@ namespace ANS
 			}
 
 		public:
+			SharedHeader header;
 			using Meta = typename ContextT::Meta;
 
 			ArchiveWriter(std::string filePath)
@@ -161,7 +161,7 @@ namespace ANS
 				return this->hasHeader && this->context.get() != 0;
 			}
 
-			void bindContext(std::shared_ptr<ContextT> ctx, u64 inputSize)
+			void bindContext(std::shared_ptr<ContextT> ctx)
 			{
 				this->context = ctx;
 
@@ -169,8 +169,8 @@ namespace ANS
 				this->header.dataTypeWidth = sizeof(typename ContextT::StateT)
 											 << 3;
 				this->header.blockSize = this->context->checkpointFrequency();
+				this->header.inputSize = 0;
 				this->header.metaSize  = -1;
-				this->header.inputSize = inputSize;
 
 				// No need to return to where we were, this invalidates the
 				// current contents of the archive anyway.
@@ -303,7 +303,7 @@ namespace ANS
 				//				  << " bytes. "
 				//				  << " Meta had " << m.channels << " ("
 				//				  << m.controlState.size() << ") channels" <<
-				//std::endl;
+				// std::endl;
 				return read * charSize / (this->header.dataTypeWidth >> 3);
 			}
 		};

@@ -34,8 +34,6 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 	using Meta			= typename ContextT::Meta;
 	using InDataT		= ANS::backend::side<MessageIndexT>;
 
-	auto inSize = getFileSize(in);
-
 	auto& mainCtx = *mainCtxPtr;
 
 	mainCtx.setCheckpointFrequency(opts->checkpoint);
@@ -43,7 +41,7 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 
 	ANS::io::ArchiveWriter<ContextT> writer(opts->outFilePath);
 
-	writer.bindContext(mainCtxPtr, inSize);
+	writer.bindContext(mainCtxPtr);
 
 	auto begin = std::chrono::steady_clock::now();
 
@@ -57,6 +55,7 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 
 	u32 j			= 0;
 	u64 dataWritten = 0;
+	u64 inSize;
 	while(in.peek() != EOF)
 	{
 		u32 i = 0;
@@ -65,6 +64,7 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 				opts->chunkSize * sizeof(MessageT)
 					/ sizeof(std::fstream::char_type));
 		u64 read = in.gcount();
+		inSize += read;
 
 		for(decltype(read) k = 0; k < read; k++)
 		{
@@ -113,6 +113,10 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 		dataWritten += result;
 		if(!ometa.empty()) std::runtime_error("Too many meta objects!");
 	}
+
+	inSize *= sizeof(std::istream::char_type);
+	// TODO encapsualte header, think of a better way to track inputSize
+	writer.header.inputSize = inSize;
 
 	auto end = std::chrono::steady_clock::now();
 	auto timeS =
@@ -170,14 +174,23 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 // TODO efficiency
 int ANS::driver::compress::run(OptionsP opts)
 {
-	std::ifstream in(opts->inFilePath, std::ios::binary);
+	std::ifstream inFile = std::ifstream(opts->inFilePath, std::ios::binary);
+	std::istream* in;
+
+	if(opts->inFilePath != "STDIN")
+	{
+		in = &inFile;
+	} else
+	{
+		in = &std::cin;
+	}
 
 	if(opts->tableFilePath == "static")
 	{
 		using ContextT =
 			ANS::ChannelCompressionContext<ANS::StaticCompressionTable>;
 		auto mainCtxPtr = std::make_shared<ContextT>(opts->channels);
-		return compressTask(opts, in, mainCtxPtr);
+		return compressTask(opts, *in, mainCtxPtr);
 	} else
 	{
 		using TableT   = ANS::DynamicCompressionTable<u32, u8>;
@@ -185,6 +198,10 @@ int ANS::driver::compress::run(OptionsP opts)
 		TableT table;
 		if(opts->tableFilePath == "")
 		{
+			if(opts->inFilePath == "STDIN")
+				throw std::runtime_error(
+					"Cannot generate table for STDIN. Please save to a file "
+					"first or use a premade table.");
 			auto tableGenOpts = TableGeneratorOptions();
 			switch(opts->alphabet)
 			{
@@ -201,15 +218,15 @@ int ANS::driver::compress::run(OptionsP opts)
 				default: break;
 			}
 			tableGenOpts.tableSizeLog = opts->tableSizeLog;
-			table = ANS::generateTable<u32, u8>(in, tableGenOpts);
+			table = ANS::generateTable<u32, u8>(*in, tableGenOpts);
+			in->seekg(0, std::ios_base::beg);
 		} else
 		{
 			std::ifstream tableFile(opts->tableFilePath);
 			table = ANS::io::loadTable<u32, u8>(tableFile);
 		}
-		in.seekg(0, std::ios_base::beg);
 		auto mainCtxPtr = std::make_shared<ContextT>(opts->channels, table);
-		return compressTask(opts, in, mainCtxPtr);
+		return compressTask(opts, *in, mainCtxPtr);
 	}
 
 	return 0;

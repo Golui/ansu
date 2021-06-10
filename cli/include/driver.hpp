@@ -26,8 +26,8 @@ namespace ANS
 		{
 			struct Options
 			{
-				std::string inFilePath;
-				std::string outFilePath;
+				std::string inFilePath	  = "STDIN";
+				std::string outFilePath	  = "compressed.ansu";
 				u64 checkpoint			  = CHECKPOINT;
 				u32 channels			  = CHANNEL_COUNT;
 				u64 chunkSize			  = AVG_MESSAGE_LENGTH;
@@ -62,8 +62,10 @@ namespace ANS
 		{
 			struct Options
 			{
-				std::string inFilePath;
-				std::string outFilePath;
+				std::string inFilePath	= "STDIN";
+				std::string outFilePath = "table.anstbl";
+				Alphabet alphabet		= Alphabet::Reduced;
+				u32 tableSizeLog		= 10;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;

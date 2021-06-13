@@ -38,6 +38,10 @@ void ANS::driver::compress::subRegister(CLI::App& app)
 				  opts->printSummary,
 				  "Whether to print a short summary after compressing or not.");
 
+	sub->add_flag("--skip-prompt",
+				  opts->skipPrompt,
+				  "If using STDIN, ship the prompt message.");
+
 	sub->add_option(
 		"-c",
 		opts->checkpoint,
@@ -106,6 +110,10 @@ void ANS::driver::generate::subRegister(CLI::App& app)
 			CLI::CheckedTransformer(ALPHABET_STR_TO_ENUM, CLI::ignore_case));
 
 	sub->add_option("-k", opts->tableSizeLog, "Logarithm of the table size.");
+
+	sub->add_flag("--skip-prompt",
+				  opts->skipPrompt,
+				  "If using STDIN, ship the prompt message.");
 
 	sub->final_callback([opts]() {
 		ANS::driver::generate::run(opts);

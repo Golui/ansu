@@ -3,6 +3,7 @@
 #include "fallocate.h"
 #include "io/archive.hpp"
 #include "mio/mio.hpp"
+#include "util.hpp"
 
 #include <iomanip>
 #include <iostream>
@@ -21,38 +22,46 @@ int decompressTask(mio::mmap_sink& out,
 				   ANS::io::ArchiveReader& reader,
 				   const ANS::io::SharedHeader& head)
 {
-	using ContextT		= ANS::ChannelCompressionContext<Table>;
-	using StateT		= typename ContextT::StateT;
-	using MessageT		= typename ContextT::MessageT;
-	using MessageIndexT = typename ContextT::MessageIndexT;
-	using Meta			= typename ContextT::Meta;
+	using ContextT		 = ANS::ChannelCompressionContext<Table>;
+	using StateT		 = typename ContextT::StateT;
+	using SymbolT		 = typename ContextT::SymbolT;
+	using ReducedSymbolT = typename ContextT::ReducedSymbolT;
+	using Meta			 = typename ContextT::Meta;
 
 	auto ctx = reader.readContext<ANS::ChannelCompressionContext<Table>>();
 
 	StateT* readbuf = new StateT[head.blockSize];
 
 	ANS::backend::stream<Meta> meta;
-	ANS::backend::stream<MessageIndexT> message;
+	ANS::backend::stream<ReducedSymbolT> message;
 
 	u32 blockNum = 0;
 	u64 lastRead = 0;
 	lastRead	 = reader.readNextBlock(readbuf, meta);
 	Meta tmpmeta = meta.read();
-	ctx.initDecoders(tmpmeta);
+	ctx.resetDecoder(tmpmeta);
 	u64 writeOffset = head.inputSize;
+
+	auto symbolSize =
+		ANS::integer::nextPowerOfTwo(ctx.ansTable.symbolWidth()) >> 3;
+
 	// clang-format off
 	do
 	// clang-format on
 	{
 		auto data	= ANS::backend::streamFromBufferReverse(readbuf, lastRead);
-		auto result = ctx.decompress(data, meta, message);
+		auto result = ctx.decompress(data, meta, message) * symbolSize;
 		writeOffset = writeOffset - result;
 		while(!message.empty())
 		{
-			out[writeOffset++] = ctx.ansTable.alphabet(message.read());
-			//			std::cout << u16(out[writeOffset - 1]) << " ";
+			auto cur = ctx.ansTable.alphabet(message.read());
+			for(u32 i = 0; i < symbolSize; i++)
+			{
+				out[writeOffset] = cur & MASK(8);
+				cur >>= 8;
+				writeOffset++;
+			}
 		}
-		//		std::cout << std::endl;
 		writeOffset -= result;
 		if(writeOffset > head.inputSize)
 		{

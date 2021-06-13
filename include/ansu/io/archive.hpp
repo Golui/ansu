@@ -117,6 +117,8 @@ namespace ANS
 		public:
 			std::fstream fileHandle;
 			std::string filePath;
+			using CharT							= std::fstream::char_type;
+			constexpr static u32 streamCharSize = sizeof(CharT);
 			void safeOpen(std::ios_base::openmode mode);
 			void increment();
 			void decrement();
@@ -178,7 +180,7 @@ namespace ANS
 				this->fileHandle.seekg(0);
 				this->outArchive(this->context->createMeta());
 				this->header.metaSize =
-					this->fileHandle.tellp() * sizeof(std::fstream::char_type);
+					this->fileHandle.tellp() * streamCharSize;
 				this->writeHeader();
 				this->hasHeader				 = true;
 				this->header.totalHeaderSize = this->fileHandle.tellp();
@@ -190,10 +192,9 @@ namespace ANS
 				if(!this->fileHandle.good()) throw ArchiveException::invalid();
 				this->header.blocks++;
 				u64 writeSize = blockSize * (this->header.dataTypeWidth >> 3)
-								/ sizeof(std::fstream::char_type);
+								/ streamCharSize;
 				auto pos = this->fileHandle.tellg();
-				this->fileHandle.write((std::fstream::char_type*) blockData,
-									   writeSize);
+				this->fileHandle.write((CharT*) blockData, writeSize);
 				this->outArchive(blockMeta);
 				this->header.finalBlockSize = blockSize;
 				return this->fileHandle.tellg() - pos;
@@ -269,7 +270,6 @@ namespace ANS
 			u64
 			readBlock(u64 blockNumber, void* data, backend::stream<Meta>& meta)
 			{
-				constexpr auto charSize = sizeof(std::fstream::char_type);
 				u64 blockData;
 				if(blockNumber == this->header.blocks - 1)
 				{
@@ -278,19 +278,19 @@ namespace ANS
 				{
 					blockData = this->header.blockSize;
 				}
-				blockData *= (this->header.dataTypeWidth >> 3) / charSize;
+				blockData *= (this->header.dataTypeWidth >> 3) / streamCharSize;
 
 				this->fileHandle.seekg(
 					this->header.totalHeaderSize
 					+ blockNumber
 						  * (this->header.blockSize
-								 * (this->header.dataTypeWidth >> 3) / charSize
+								 * (this->header.dataTypeWidth >> 3)
+								 / streamCharSize
 							 + this->header.metaSize));
 
 				if(!this->fileHandle.good()) throw ArchiveException::invalid();
 				auto dataReadOffset = this->fileHandle.tellg();
-				this->fileHandle.read((std::fstream::char_type*) data,
-									  blockData);
+				this->fileHandle.read((CharT*) data, blockData);
 				auto read = this->fileHandle.gcount();
 				Meta m;
 				this->inArchive(m);
@@ -304,7 +304,8 @@ namespace ANS
 				//				  << " Meta had " << m.channels << " ("
 				//				  << m.controlState.size() << ") channels" <<
 				// std::endl;
-				return read * charSize / (this->header.dataTypeWidth >> 3);
+				return read * streamCharSize
+					   / (this->header.dataTypeWidth >> 3);
 			}
 		};
 	} // namespace io

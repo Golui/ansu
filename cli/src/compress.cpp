@@ -3,9 +3,11 @@
 #include "driver.hpp"
 #include "io/archive.hpp"
 #include "io/table_archive.hpp"
+#include "util.hpp"
 
 #include <array>
 #include <chrono>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -23,16 +25,18 @@ std::streamsize getFileSize(T& file)
 	return length;
 }
 
-template <typename ContextT>
+template <typename ContextT, typename SymbolT>
 int compressTask(ANS::driver::compress::OptionsP opts,
 				 std::istream& in,
 				 std::shared_ptr<ContextT> mainCtxPtr)
 {
-	using StateT		= typename ContextT::StateT;
-	using MessageT		= u8; // typename ContextT::MessageT;
-	using MessageIndexT = typename ContextT::MessageIndexT;
-	using Meta			= typename ContextT::Meta;
-	using InDataT		= ANS::backend::side<MessageIndexT>;
+	using StateT		 = typename ContextT::StateT;
+	using ReducedSymbolT = typename ContextT::ReducedSymbolT;
+	using Meta			 = typename ContextT::Meta;
+	using InDataT		 = ANS::backend::side<ReducedSymbolT>;
+
+	using CharT					  = std::istream::char_type;
+	constexpr auto streamCharSize = sizeof(CharT);
 
 	auto& mainCtx = *mainCtxPtr;
 
@@ -45,13 +49,19 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 
 	auto begin = std::chrono::steady_clock::now();
 
+	const auto symbolWidth =
+		(ANS::integer::nextPowerOfTwo(mainCtx.ansTable.symbolWidth()) >> 3);
+	const auto chunkByteSize = opts->chunkSize * symbolWidth;
+
 	std::array<u64, 256> counts = {0};
-	MessageT* msgbuf			= new MessageT[opts->chunkSize];
+	SymbolT* msgbuf				= new SymbolT[opts->chunkSize];
 	StateT* statebuf			= new StateT[opts->checkpoint];
 
-	ANS::backend::side_stream<MessageIndexT> msg;
+	ANS::backend::side_stream<ReducedSymbolT> msg;
 	ANS::backend::stream<StateT> out;
 	ANS::backend::stream<Meta> ometa;
+
+	// TODO we only support types with power of 2 widths
 
 	u32 j			= 0;
 	u64 dataWritten = 0;
@@ -60,10 +70,9 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 	{
 		u32 i = 0;
 
-		in.read((std::fstream::char_type*) msgbuf,
-				opts->chunkSize * sizeof(MessageT)
-					/ sizeof(std::fstream::char_type));
-		u64 read = in.gcount();
+		in.read((CharT*) msgbuf, chunkByteSize / streamCharSize);
+		u64 read		= in.gcount();
+		u64 readSymbols = read / symbolWidth;
 		inSize += read;
 
 		for(decltype(read) k = 0; k < read; k++)
@@ -71,9 +80,9 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 			counts[((u8*) msgbuf)[k]]++;
 		}
 
-		if(read != opts->chunkSize * sizeof(MessageT) || in.peek() == EOF)
+		if(read != chunkByteSize || in.peek() == EOF)
 		{
-			for(; i < read - 1; i++)
+			for(; i < readSymbols - 1; i++)
 			{
 				msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
 			}
@@ -82,7 +91,7 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 			msg << last;
 		} else
 		{
-			for(; i < read; i++)
+			for(; i < readSymbols; i++)
 			{
 				msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
 			}
@@ -111,35 +120,49 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 		auto result = writer.writeBlock(0, statebuf, meta);
 		//		std::cout << "Wrote " << result << " bytes.\n";
 		dataWritten += result;
-		if(!ometa.empty()) std::runtime_error("Too many meta objects!");
+		if(!ometa.empty())
+		{
+			std::cerr << "Too many meta objects! Aborting." << std::endl;
+			return EXIT_FAILURE;
+		}
 	}
 
 	inSize *= sizeof(std::istream::char_type);
+
 	// TODO encapsualte header, think of a better way to track inputSize
 	writer.header.inputSize = inSize;
 
-	auto end = std::chrono::steady_clock::now();
-	auto timeS =
-		std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
-			.count()
-		/ 1.0e6;
-
-	auto outSize = getFileSize(writer.fileHandle);
-
-	double entropy = 0.0;
-
-	u64 sum = 0;
-
-	for(u16 k = 0; k < 256; k++) sum += counts[k];
-	for(u16 k = 0; k < 256; k++)
+	if(inSize % symbolWidth != 0)
 	{
-		u32 count = counts[k];
-		if(count != 0)
-			entropy -= count / double(sum) * (log2(count / double(sum)));
+		std::cerr
+			<< "The given data does not evenly divide into symbols of width "
+			<< mainCtx.ansTable.symbolWidth() << " bits. Aborting."
+			<< std::endl;
+		return EXIT_FAILURE;
 	}
 
 	if(opts->printSummary)
 	{
+		auto end = std::chrono::steady_clock::now();
+		auto timeS =
+			std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
+				.count()
+			/ 1.0e6;
+
+		auto outSize = getFileSize(writer.fileHandle);
+
+		double entropy = 0.0;
+
+		u64 sum = 0;
+
+		for(u16 k = 0; k < 256; k++) sum += counts[k];
+		for(u16 k = 0; k < 256; k++)
+		{
+			u32 count = counts[k];
+			if(count != 0)
+				entropy -= count / double(sum) * (log2(count / double(sum)));
+		}
+
 		std::cout << std::setprecision(6);
 		std::cout << "Done! Took " << timeS << "s \n";
 		std::cout << "Stats:"
@@ -171,6 +194,35 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 	return 0;
 }
 
+template <ANS::driver::Alphabet Alph>
+int compressWrapperGenerate(ANS::driver::compress::OptionsP opts,
+							std::istream& in,
+							ANS::TableGeneratorOptions tableGenOpts)
+{
+	using SymbolT  = typename ANS::integer::fitting<(int) Alph>::type;
+	using TableT   = ANS::DynamicCompressionTable<u32, u32>;
+	using ContextT = ANS::ChannelCompressionContext<TableT>;
+
+	TableT table = ANS::generateTable<u32, u32>(in, tableGenOpts);
+	in.seekg(0, std::ios_base::beg);
+	in.clear();
+
+	auto mainCtxPtr = std::make_shared<ContextT>(opts->channels, table);
+	return compressTask<ContextT, SymbolT>(opts, in, mainCtxPtr);
+}
+
+template <ANS::driver::Alphabet Alph>
+int compressWrapperLoad(ANS::driver::compress::OptionsP opts, std::istream& in)
+{
+	using SymbolT  = typename ANS::integer::fitting<(int) Alph>::type;
+	using TableT   = ANS::DynamicCompressionTable<>;
+	using ContextT = ANS::ChannelCompressionContext<TableT>;
+	std::ifstream tableFile(opts->tableFilePath);
+	TableT table	= ANS::io::loadTable<u32, u32>(tableFile);
+	auto mainCtxPtr = std::make_shared<ContextT>(opts->channels, table);
+	return compressTask<ContextT, SymbolT>(opts, in, mainCtxPtr);
+}
+
 // TODO efficiency
 int ANS::driver::compress::run(OptionsP opts)
 {
@@ -190,43 +242,70 @@ int ANS::driver::compress::run(OptionsP opts)
 		using ContextT =
 			ANS::ChannelCompressionContext<ANS::StaticCompressionTable>;
 		auto mainCtxPtr = std::make_shared<ContextT>(opts->channels);
-		return compressTask(opts, *in, mainCtxPtr);
+		return compressTask<ContextT, message_t>(opts, *in, mainCtxPtr);
 	} else
 	{
-		using TableT   = ANS::DynamicCompressionTable<u32, u8>;
-		using ContextT = ANS::ChannelCompressionContext<TableT>;
-		TableT table;
 		if(opts->tableFilePath == "")
 		{
 			if(opts->inFilePath == "STDIN")
-				throw std::runtime_error(
-					"Cannot generate table for STDIN. Please save to a file "
-					"first or use a premade table.");
-			auto tableGenOpts = TableGeneratorOptions();
+			{
+				std::cerr
+					<< "Cannot generate table for STDIN. Please save to a file "
+					   "first or use a premade table."
+					<< std::endl;
+				return EXIT_FAILURE;
+			}
+
+			auto inSize = getFileSize(*in);
+			if(inSize % ((u32) opts->alphabet >> 3) != 0)
+			{
+				std::cerr << "The given data does not evenly divide into "
+							 "symbols of width "
+						  << (u32) opts->alphabet << " bits. Aborting."
+						  << std::endl;
+				return EXIT_FAILURE;
+			}
+
+			auto tableGenOpts		  = TableGeneratorOptions();
+			tableGenOpts.tableSizeLog = opts->tableSizeLog;
+			tableGenOpts.symbolWidth  = (u32) opts->alphabet;
 			switch(opts->alphabet)
 			{
-				case ANS::driver::Alphabet::Reduced:
+				case ANS::driver::Alphabet::U8:
 				{
-					tableGenOpts.useFullAscii = false;
-					break;
+					return compressWrapperGenerate<ANS::driver::Alphabet::U8>(
+						opts, *in, tableGenOpts);
 				}
-				case ANS::driver::Alphabet::Ascii:
+				case ANS::driver::Alphabet::U16:
 				{
-					tableGenOpts.useFullAscii = true;
-					break;
+					return compressWrapperGenerate<ANS::driver::Alphabet::U16>(
+						opts, *in, tableGenOpts);
 				}
 				default: break;
 			}
-			tableGenOpts.tableSizeLog = opts->tableSizeLog;
-			table = ANS::generateTable<u32, u8>(*in, tableGenOpts);
-			in->seekg(0, std::ios_base::beg);
 		} else
 		{
-			std::ifstream tableFile(opts->tableFilePath);
-			table = ANS::io::loadTable<u32, u8>(tableFile);
+			if(opts->inFilePath == "STDIN" && !opts->skipPrompt)
+			{
+				std::cout << "Compressing stdin. Input some data and then "
+							 "press Ctrl+d"
+						  << std::endl;
+			}
+			switch(opts->alphabet)
+			{
+				case ANS::driver::Alphabet::U8:
+				{
+					return compressWrapperLoad<ANS::driver::Alphabet::U8>(opts,
+																		  *in);
+				}
+				case ANS::driver::Alphabet::U16:
+				{
+					return compressWrapperLoad<ANS::driver::Alphabet::U16>(opts,
+																		   *in);
+				}
+				default: break;
+			}
 		}
-		auto mainCtxPtr = std::make_shared<ContextT>(opts->channels, table);
-		return compressTask(opts, *in, mainCtxPtr);
 	}
 
 	return 0;

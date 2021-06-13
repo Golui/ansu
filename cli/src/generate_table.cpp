@@ -21,22 +21,16 @@ int ANS::driver::generate::run(OptionsP opts)
 	auto tableGenOpts = TableGeneratorOptions();
 
 	tableGenOpts.tableSizeLog = opts->tableSizeLog;
-	switch(opts->alphabet)
-	{
-		case ANS::driver::Alphabet::Reduced:
-		{
-			tableGenOpts.useFullAscii = false;
-			break;
-		}
-		case ANS::driver::Alphabet::Ascii:
-		{
-			tableGenOpts.useFullAscii = true;
-			break;
-		}
-		default: break;
-	}
+	tableGenOpts.symbolWidth  = (u32) opts->alphabet;
 
-	auto table = ANS::generateTable<u32, u8>(*in, tableGenOpts);
+	if(opts->inFilePath == "STDIN" && !opts->skipPrompt)
+	{
+		std::cout << "Compressing stdin. Input some data and then "
+					 "press Ctrl+d"
+				  << std::endl;
+	}
+	// TODO
+	auto table = ANS::generateTable<u32, u32>(*in, tableGenOpts);
 	ANS::io::saveTable(out, table);
 
 	return 0;

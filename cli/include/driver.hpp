@@ -15,12 +15,12 @@ namespace ANS
 
 		enum class Alphabet : int
 		{
-			Reduced,
-			Ascii
+			U8	= 8,
+			U16 = 16,
 		};
 
 		static const std::map<std::string, Alphabet> ALPHABET_STR_TO_ENUM {
-			{"reduced", Alphabet::Reduced}, {"ascii", Alphabet::Ascii}};
+			{"8", Alphabet::U8}, {"16", Alphabet::U16}};
 
 		namespace compress
 		{
@@ -31,10 +31,11 @@ namespace ANS
 				u64 checkpoint			  = CHECKPOINT;
 				u32 channels			  = CHANNEL_COUNT;
 				u64 chunkSize			  = AVG_MESSAGE_LENGTH;
-				Alphabet alphabet		  = Alphabet::Reduced;
+				Alphabet alphabet		  = Alphabet::U8;
 				u32 tableSizeLog		  = 10;
 				std::string tableFilePath = "";
 				bool printSummary		  = false;
+				bool skipPrompt			  = false;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;
@@ -64,8 +65,9 @@ namespace ANS
 			{
 				std::string inFilePath	= "STDIN";
 				std::string outFilePath = "table.anstbl";
-				Alphabet alphabet		= Alphabet::Reduced;
+				Alphabet alphabet		= Alphabet::U8;
 				u32 tableSizeLog		= 10;
+				bool skipPrompt			= false;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;

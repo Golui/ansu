@@ -4,6 +4,7 @@
 #include "ints.hpp"
 #include "util.hpp"
 
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -29,62 +30,67 @@ namespace ANS
 
 	} // namespace __internal
 
-	template <typename _StateT, typename _MessageT>
+	template <typename _StateT, typename _SymbolT>
 	struct CompressionTable
 	{
 	protected:
 		u32 _alphabetSize;
 		u32 _tableSizeLog;
 		u32 _tableSize;
+		u32 _symbolWidth;
 
 	public:
-		constexpr static u32 stateWidth		= sizeof(_StateT) << 3;
-		constexpr static u32 mesessageWidth = sizeof(_MessageT) << 3;
+		constexpr static u32 stateWidth = sizeof(_StateT) << 3;
 
 		using StateT		 = _StateT;
 		using StateDeltaT	 = s32;
-		using MessageT		 = _MessageT;
+		using SymbolT		 = _SymbolT;
 		using EncodingTableT = StateT;
-		using MessageIndexT	 = u32;
+		using ReducedSymbolT = u32;
 		using NbBitsT		 = u32;
 		using NbBitsDeltaT	 = s32;
 
 		CompressionTable() {}
 
-		CompressionTable(u32 alphabetSize, u32 tableSizeLog)
+		CompressionTable(u32 alphabetSize, u32 tableSizeLog, u32 symbolWidth)
 			: _alphabetSize(alphabetSize),
 			  _tableSizeLog(tableSizeLog),
-			  _tableSize(1 << tableSizeLog)
+			  _tableSize(1 << tableSizeLog),
+			  _symbolWidth(symbolWidth)
 		{}
 
 		u32 alphabetSize() const { return this->_alphabetSize; };
 		u32 tableSizeLog() const { return this->_tableSizeLog; };
 		u32 tableSize() const { return this->_tableSize; };
+		u32 symbolWidth() const { return this->_symbolWidth; };
 
-		virtual tables::Type type() const							 = 0;
-		virtual MessageT states(StateT index) const					 = 0;
-		virtual StateT newX(StateT index) const						 = 0;
-		virtual EncodingTableT encodingTable(StateT index) const	 = 0;
-		virtual NbBitsDeltaT nbBitsDelta(StateT index) const		 = 0;
-		virtual NbBitsT nb(StateT index) const						 = 0;
-		virtual StateDeltaT start(MessageIndexT index) const		 = 0;
-		virtual StateT adjStart(MessageIndexT index) const			 = 0;
-		virtual MessageT alphabet(MessageIndexT index) const		 = 0;
-		virtual MessageIndexT reverseAlphabet(MessageT symbol) const = 0;
+		virtual tables::Type type() const						 = 0;
+		virtual ReducedSymbolT states(StateT index) const		 = 0;
+		virtual StateT newX(StateT index) const					 = 0;
+		virtual EncodingTableT encodingTable(StateT index) const = 0;
+		virtual NbBitsDeltaT nbBitsDelta(StateT index) const	 = 0;
+		virtual NbBitsT nb(StateT index) const					 = 0;
+		virtual StateDeltaT start(ReducedSymbolT index) const	 = 0;
+		virtual StateT adjStart(ReducedSymbolT index) const		 = 0;
+
+		virtual SymbolT alphabet(ReducedSymbolT index) const		 = 0;
+		virtual ReducedSymbolT reverseAlphabet(SymbolT symbol) const = 0;
 
 		virtual ~CompressionTable() {}
 	};
 
 	// TODO While this is parametrized, we assume the table is always stored as
 	// 32 bit in the archive.
-	template <typename _StateT = u32, typename _MessageT = u8>
-	struct DynamicCompressionTable : public CompressionTable<_StateT, _MessageT>
+	// _SymbolT is an internal type that is wide enough to encompass the symbol,
+	// not necessarily how big the symbol is exactly!
+	template <typename _StateT = u32, typename _SymbolT = u32>
+	struct DynamicCompressionTable : public CompressionTable<_StateT, _SymbolT>
 	{
-		using Base			 = CompressionTable<_StateT, _MessageT>;
+		using Base			 = CompressionTable<_StateT, _SymbolT>;
 		using StateT		 = typename Base::StateT;
 		using StateDeltaT	 = typename Base::StateDeltaT;
-		using MessageT		 = typename Base::MessageT;
-		using MessageIndexT	 = typename Base::MessageIndexT;
+		using SymbolT		 = typename Base::SymbolT;
+		using ReducedSymbolT = typename Base::ReducedSymbolT;
 		using EncodingTableT = typename Base::EncodingTableT;
 		using NbBitsDeltaT	 = typename Base::NbBitsDeltaT;
 		using NbBitsT		 = typename Base::NbBitsT;
@@ -98,7 +104,7 @@ namespace ANS
 			std::vector<NbBitsT> nb					  = {0};
 			std::vector<StateDeltaT> start			  = {0};
 			std::vector<StateT> adjStart			  = {0};
-			std::vector<MessageT> alphabet			  = {0};
+			std::vector<SymbolT> alphabet			  = {0};
 
 			template <typename Archive>
 			void save(Archive& ar) const
@@ -130,20 +136,21 @@ namespace ANS
 
 	private:
 		Data data;
-		std::unordered_map<MessageT, MessageIndexT> reverseAlphabetMap;
+		std::unordered_map<SymbolT, ReducedSymbolT> reverseAlphabetMap;
 
 	public:
 		DynamicCompressionTable() : Base() {}
 
 		DynamicCompressionTable(u32 alphabetSize,
 								u32 tableSizeLog,
+								u32 symbolWidth,
 								Data dt = Data())
-			: Base(alphabetSize, tableSizeLog), data(dt)
+			: Base(alphabetSize, tableSizeLog, symbolWidth), data(dt)
 		{}
 
 		virtual tables::Type type() const override { return tables::Dynamic; }
 
-		virtual MessageT states(StateT index) const
+		virtual ReducedSymbolT states(StateT index) const
 		{
 			return data.states[index];
 		}
@@ -161,23 +168,23 @@ namespace ANS
 
 		virtual NbBitsT nb(StateT index) const { return data.nb[index]; }
 
-		virtual StateDeltaT start(MessageIndexT index) const
+		virtual StateDeltaT start(ReducedSymbolT index) const
 		{
 			return data.start[index];
 		}
 
-		virtual StateT adjStart(MessageIndexT index) const
+		virtual StateT adjStart(ReducedSymbolT index) const
 		{
 			return data.adjStart[index];
 		}
 
-		virtual MessageT alphabet(MessageIndexT index) const
+		virtual SymbolT alphabet(ReducedSymbolT index) const
 		{
 			// Do bounds checking
 			return data.alphabet.at(index);
 		}
 
-		virtual MessageIndexT reverseAlphabet(MessageT index) const
+		virtual ReducedSymbolT reverseAlphabet(SymbolT index) const
 		{
 			return reverseAlphabetMap.at(index);
 		}
@@ -194,12 +201,27 @@ namespace ANS
 		}
 
 		template <typename Archive>
-		void serialize(Archive& ar)
+		void load(Archive& ar)
 		{
 			ar(this->_alphabetSize, this->_tableSizeLog);
 			this->_tableSize = 1 << this->_tableSizeLog;
-			ar(this->data);
+			u32 size;
+			ar(size);
+			if(size != sizeof(SymbolT))
+			{
+				throw std::runtime_error("Incompatible table.");
+			}
+			ar(this->_symbolWidth, this->data);
 			this->setData(this->data);
+		}
+
+		template <typename Archive>
+		void save(Archive& ar) const
+		{
+			ar(this->_alphabetSize, this->_tableSizeLog);
+			u32 size = sizeof(SymbolT);
+			ar(size, this->_symbolWidth);
+			ar(this->data);
 		}
 	};
 
@@ -210,17 +232,19 @@ namespace ANS
 	public:
 		using StateT		 = typename Base::StateT;
 		using StateDeltaT	 = typename Base::StateDeltaT;
-		using MessageT		 = typename Base::MessageT;
-		using MessageIndexT	 = typename Base::MessageIndexT;
+		using SymbolT		 = typename Base::SymbolT;
+		using ReducedSymbolT = typename Base::ReducedSymbolT;
 		using EncodingTableT = typename Base::EncodingTableT;
 		using NbBitsDeltaT	 = typename Base::NbBitsDeltaT;
 		using NbBitsT		 = typename Base::NbBitsT;
 
-		StaticCompressionTable() : Base(ALPHABET_LENGTH, TABLE_SIZE_LOG) {}
+		StaticCompressionTable()
+			: Base(ALPHABET_LENGTH, TABLE_SIZE_LOG, sizeof(message_t) << 3)
+		{}
 
 		virtual tables::Type type() const override { return tables::Static; }
 
-		virtual MessageT states(StateT index) const override
+		virtual ReducedSymbolT states(StateT index) const override
 		{
 			return StaticTable::states[index];
 		}
@@ -245,32 +269,29 @@ namespace ANS
 			return StaticTable::nb[index];
 		}
 
-		virtual StateDeltaT start(MessageIndexT index) const override
+		virtual StateDeltaT start(ReducedSymbolT index) const override
 		{
 			return StaticTable::start[index];
 		}
 
-		virtual StateT adjStart(MessageIndexT index) const override
+		virtual StateT adjStart(ReducedSymbolT index) const override
 		{
 			return StaticTable::adj_start[index];
 		}
 
-		virtual MessageT alphabet(MessageIndexT index) const override
+		virtual SymbolT alphabet(ReducedSymbolT index) const override
 		{
 			return index;
 		}
 
-		virtual MessageIndexT reverseAlphabet(MessageT index) const override
+		virtual ReducedSymbolT reverseAlphabet(SymbolT index) const override
 		{
 			return index;
 		}
 
 		template <typename Archive>
 		void serialize(Archive& ar)
-		{
-			u32 dummy = 0xDEADBEEF;
-			ar(dummy);
-		}
+		{}
 	};
 
 } // namespace ANS

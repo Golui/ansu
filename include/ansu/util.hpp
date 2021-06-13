@@ -26,7 +26,8 @@ namespace ANS
 
 	namespace integer
 	{
-		// TODO CRITICAL Fix .clang_format
+		u64 nextPowerOfTwo(u64 v);
+
 		template <u64 Num, bool _signed = false>
 		struct fitting
 		{

@@ -17,7 +17,7 @@
 
 namespace ANS
 {
-	template <typename _Table = DynamicCompressionTable<>,
+	template <typename _Table,
 			  template <typename...> class Container = std::vector>
 	struct ChannelCompressionContext
 		: public CompressionContext<ChannelCompressionContext,
@@ -27,11 +27,10 @@ namespace ANS
 		using BaseT =
 			CompressionContext<ChannelCompressionContext, _Table, Container>;
 
-		using Table			= _Table;
-		using StateT		= typename Table::StateT;
-		using MessageT		= typename Table::MessageT;
-		using MessageIndexT = typename Table::MessageIndexT;
-		using NbBitsT		= typename Table::NbBitsT;
+		using Table			 = _Table;
+		using StateT		 = typename Table::StateT;
+		using ReducedSymbolT = typename Table::ReducedSymbolT;
+		using NbBitsT		 = typename Table::NbBitsT;
 		template <typename... T>
 		using ContainerT = Container<T...>;
 
@@ -55,6 +54,7 @@ namespace ANS
 		{
 			u32 channels;
 			Container<StateT> controlState;
+			s32 symbolsInBlock;
 
 			Meta(u32 channelCount = 0) : channels(channelCount)
 			{
@@ -64,6 +64,7 @@ namespace ANS
 			bool operator==(const Meta other)
 			{
 				if(this->channels != other.channels) return false;
+				if(this->symbolsInBlock != other.symbolsInBlock) return false;
 				for(u32 i = 0; i < this->channels; i++)
 				{
 					if(this->controlState[i] != other.controlState[i])
@@ -77,7 +78,7 @@ namespace ANS
 			template <typename Archive>
 			void serialize(Archive& ar)
 			{
-				ar(this->channels, this->controlState);
+				ar(this->channels, this->controlState, this->symbolsInBlock);
 			}
 		};
 
@@ -86,8 +87,8 @@ namespace ANS
 		Container<State> coders;
 		u32 lastChannel;
 		State master;
-		Container<MessageIndexT> reverseMsg;
-		u8 deadBits;
+		Container<ReducedSymbolT> reverseMsg;
+		s32 symbolsInCurrentBlock = 0;
 
 	private:
 	public:
@@ -95,7 +96,7 @@ namespace ANS
 			: channelCount(channelCount), ansTable(tbl)
 		{
 			this->coders = Container<State>(this->channelCount);
-			this->resetImpl();
+			this->resetEncoder();
 		}
 		void resetDecompressBuffer()
 		{
@@ -115,18 +116,33 @@ namespace ANS
 			s.partialBits = this->allBitsRemaining;
 		}
 
-		void resetImpl()
+		void resetEncoderImpl()
 		{
 			for(u32 i = 0; i < this->channelCount; i++)
 			{
 				resetEncoding(this->coders[i]);
 			}
 			resetEncodingMaster(master);
-			this->reverseMsg  = Container<MessageIndexT>();
 			this->lastChannel = 0;
 		}
 
-		void encodeSingle(State& s, MessageT current)
+		void resetDecoderImpl(Meta& meta)
+		{
+			this->reverseMsg.clear();
+			for(u32 i = 0; i < this->channelCount; i++)
+			{
+				StateT channelState = meta.controlState[i];
+				State& a			= coders[i];
+				a.x					= channelState;
+			}
+			this->symbolsInCurrentBlock = meta.symbolsInBlock;
+		}
+
+		Meta createMeta() { return Meta(this->channelCount); }
+
+		// Compression
+
+		void encodeSingle(State& s, ReducedSymbolT current)
 		{
 			PRAGMA_HLS(pipeline)
 
@@ -142,6 +158,7 @@ namespace ANS
 			// Get next state
 			s.x = ansTable.encodingTable(ansTable.start(current)
 										 + (s.x >> nbBits));
+			this->symbolsInCurrentBlock++;
 		}
 
 		void mergeChannels(backend::stream<StateT>& out,
@@ -160,6 +177,8 @@ namespace ANS
 					finished.controlState[i] =
 						this->coders[i].x - this->ansTable.tableSize();
 				}
+
+				finished.symbolsInBlock = this->symbolsInCurrentBlock;
 
 				meta << finished;
 			};
@@ -203,8 +222,7 @@ namespace ANS
 			if(hadLast) emitMeta();
 		}
 
-		template <typename T>
-		void compressImpl(backend::side_stream<T>& message,
+		void compressImpl(backend::side_stream<ReducedSymbolT>& message,
 						  backend::stream<StateT>& out,
 						  backend::stream<Meta>& meta)
 		{
@@ -219,8 +237,7 @@ namespace ANS
 					if(k >= this->channelCount) k -= this->channelCount;
 					auto cur = message.read();
 					// auto oldX = this->coders[k].x;
-					this->encodeSingle(this->coders[k],
-									   static_cast<MessageT>(cur.data));
+					this->encodeSingle(this->coders[k], cur.data);
 					//		std::cout << k << " " << oldX << " " << coders[k].x
 					//<< " "
 					//				  << std::endl;
@@ -272,29 +289,18 @@ namespace ANS
 				newd, d, available, this->allBitsRemaining - shiftAmount);
 		}
 
-		void initDecoders(Meta& meta)
-		{
-			for(u32 i = 0; i < this->channelCount; i++)
-			{
-				StateT channelState = meta.controlState[i];
-				State& a			= coders[i];
-				a.x					= channelState;
-			}
-		}
+		// Decompression
 
-		DecompressResult decompressImpl(backend::stream<StateT>& data,
-										backend::stream<Meta>& meta,
-										backend::stream<MessageIndexT>& message)
+		DecompressResult
+		decompressImpl(backend::stream<StateT>& data,
+					   backend::stream<Meta>& meta,
+					   backend::stream<ReducedSymbolT>& message)
 		{
 			StateT read			= 0;
 			auto& curVal		= master.partial;
 			auto& availableBits = master.partialBits;
 
-			u32 loopCount = 0;
-			bool isNextJustStateChange =
-				this->ansTable.nbBitsDelta(this->coders[this->lastChannel].x)
-				== 0;
-			while(!data.empty() || availableBits > 0 || isNextJustStateChange)
+			while(this->symbolsInCurrentBlock > 0)
 			{
 				State& curDec = this->coders[this->lastChannel];
 
@@ -314,13 +320,17 @@ namespace ANS
 				{
 					if(data.empty())
 					{
-						// std::cout << "NEXT BLOCK\n";
 						break;
 					} else
-						throw std::runtime_error("Decompression went booboo");
+						throw std::runtime_error(
+							"The decompression requires more bits than are "
+							"available, but there is data still elft in the "
+							"stream. This is a bug!");
 				}
+
 				curDec.partialBits = this->ansTable.nbBitsDelta(curDec.x);
 				reverseMsg.push_back(this->ansTable.states(curDec.x));
+				this->symbolsInCurrentBlock--;
 				curDec.x = this->ansTable.newX(curDec.x);
 
 				curDec.partial = curVal & MASK(curDec.partialBits);
@@ -342,25 +352,9 @@ namespace ANS
 				//			  << u32(availableBits) << std::endl;
 				this->shift(read, curVal, availableBits, curDec.partialBits);
 
-				// If it just so happens that a state requires zero bits, and
-				// if newX yields the same state for all channels, we will have
-				// an infinite loop on our hands. Here we handle this case.
-				if(curDec.partialBits == 0 && curDec.x == oldX)
-				{
-					loopCount++;
-				} else
-				{
-					loopCount = 0;
-				}
-
-				if(loopCount == this->channelCount) break;
-
 				if(this->lastChannel == 0)
 					this->lastChannel = this->channelCount;
 				this->lastChannel--;
-				isNextJustStateChange = this->ansTable.nbBitsDelta(
-											this->coders[this->lastChannel].x)
-										== 0;
 			}
 
 			auto size = reverseMsg.size();
@@ -376,16 +370,13 @@ namespace ANS
 			return size;
 		}
 
-		Meta createMeta() { return Meta(this->channelCount); }
-
 		template <typename Archive>
 		void save(Archive& ar) const
 		{
 			ar(this->channelCount,
 			   this->ansTable,
 			   this->lastChannel,
-			   this->master,
-			   this->deadBits);
+			   this->master);
 		}
 
 		template <typename Archive>
@@ -394,8 +385,7 @@ namespace ANS
 			ar(this->channelCount,
 			   this->ansTable,
 			   this->lastChannel,
-			   this->master,
-			   this->deadBits);
+			   this->master);
 			this->master.partial >>= this->master.partialBits;
 			this->master.partialBits =
 				this->allBitsRemaining - this->master.partialBits;

@@ -2,42 +2,45 @@
 
 #include "data/compression_table.hpp"
 
+#include <algorithm>
 #include <iostream>
 #include <unordered_map>
 
 namespace ANS
 {
-	template <typename MessageT>
-	using OccurenceMap = std::unordered_map<MessageT, u32>;
-	template <typename MessageT>
-	using QunatizedMap = std::unordered_map<MessageT, u32>;
-	template <typename MessageT>
-	using ProbabilityMap = std::unordered_map<MessageT, double>;
+	template <typename SymbolT>
+	using OccurenceMap = std::unordered_map<SymbolT, u32>;
+	template <typename SymbolT>
+	using QunatizedMap = std::unordered_map<SymbolT, u32>;
+	template <typename SymbolT>
+	using ProbabilityMap = std::unordered_map<SymbolT, double>;
 
-	template <typename MessageT>
+	template <typename SymbolT>
 	struct SampleInformation
 	{
 		struct Symbol
 		{
-			MessageT symbol = 0;
-			s32 q			= 0;
-			double p		= 0;
+			SymbolT symbol = 0;
+			s32 q		   = 0;
+			double p	   = 0;
 		};
 		std::vector<Symbol> data;
 	};
 
 	struct TableGeneratorOptions
 	{
-		u32 tableSizeLog  = 10;
-		bool useFullAscii = false;
+		u32 tableSizeLog = 10;
+		// TODO
+		bool useFull = false;
+		u32 symbolWidth;
 
 		u32 tableSize() { return 1 << this->tableSizeLog; }
 	};
 
 	namespace strategies
 	{
-		template <typename MessageT>
-		void quantizeFast(SampleInformation<MessageT>& si,
+		template <typename SymbolT>
+		void quantizeFast(SampleInformation<SymbolT>& si,
 						  TableGeneratorOptions opts)
 		{
 			u32 used	= 0;
@@ -64,9 +67,9 @@ namespace ANS
 					"alphabet size.");
 		}
 
-		template <typename MessageT, typename Data>
+		template <typename SymbolT, typename Data>
 		void spreadFast(Data& data,
-						const SampleInformation<MessageT>& si,
+						const SampleInformation<SymbolT>& si,
 						TableGeneratorOptions opts)
 		{
 			u32 pos	 = 0;
@@ -85,15 +88,17 @@ namespace ANS
 		}
 	} // namespace strategies
 
-	template <typename MessageT>
-	OccurenceMap<MessageT> generateProbabilities(std::istream& sample)
+	template <typename SymbolT>
+	OccurenceMap<SymbolT> generateProbabilities(std::istream& sample,
+												TableGeneratorOptions& opts)
 	{
-		OccurenceMap<MessageT> result;
-		constexpr auto readWidth =
-			sizeof(MessageT) / sizeof(std::istream::char_type);
+		OccurenceMap<SymbolT> result;
+		const auto readWidth =
+			(ANS::integer::nextPowerOfTwo(opts.symbolWidth) >> 3)
+			/ sizeof(std::istream::char_type);
 		while(sample.peek() != EOF)
 		{
-			MessageT symbol;
+			SymbolT symbol = 0;
 			sample.read((std::istream::char_type*) &symbol, readWidth);
 			auto it = result.find(symbol);
 			if(it == result.end())
@@ -108,19 +113,22 @@ namespace ANS
 		return result;
 	}
 
-	template <typename MessageT>
-	SampleInformation<MessageT>
-	createSampleInformation(OccurenceMap<MessageT>&& map,
+	template <typename SymbolT>
+	SampleInformation<SymbolT>
+	createSampleInformation(OccurenceMap<SymbolT>&& map,
 							TableGeneratorOptions& opts)
 	{
-		SampleInformation<MessageT> result;
-		typename OccurenceMap<MessageT>::mapped_type sum = 0;
-		if(opts.useFullAscii)
+		SampleInformation<SymbolT> result;
+		typename OccurenceMap<SymbolT>::mapped_type sum = 0;
+		if(opts.useFull)
 		{
-			result.data.resize(256);
-			for(u32 i = 0; i < 256; i++) { result.data[i].symbol = i; }
+			throw std::runtime_error("NYI");
+			auto fullSize = 1UL << (sizeof(SymbolT) << 3);
+			result.data.resize(fullSize);
+			for(u32 i = 0; i < fullSize; i++) { result.data[i].symbol = i; }
 			for(auto& entry: map)
 			{
+				// Just to make sure, I guess...
 				result.data[entry.first].symbol = entry.first;
 				sum += entry.second;
 			}
@@ -145,14 +153,14 @@ namespace ANS
 	}
 
 	template <typename StateT,
-			  typename MessageT,
-			  typename ResultT = DynamicCompressionTable<StateT, MessageT>>
-	ResultT generateTable(SampleInformation<MessageT>&& _si,
+			  typename SymbolT,
+			  typename ResultT = DynamicCompressionTable<StateT, SymbolT>>
+	ResultT generateTable(SampleInformation<SymbolT>&& _si,
 						  TableGeneratorOptions opts)
 	{
 		auto si = _si;
 
-		ResultT result(si.data.size(), opts.tableSizeLog);
+		ResultT result(si.data.size(), opts.tableSizeLog, opts.symbolWidth);
 		typename ResultT::Data data;
 		// TODO Make strategies an option
 		strategies::quantizeFast(si, opts);
@@ -209,21 +217,21 @@ namespace ANS
 		return result;
 	}
 
-	template <typename StateT, typename MessageT>
-	DynamicCompressionTable<StateT, MessageT>
-	generateTable(OccurenceMap<MessageT>&& occurences,
+	template <typename StateT, typename SymbolT>
+	DynamicCompressionTable<StateT, SymbolT>
+	generateTable(OccurenceMap<SymbolT>&& occurences,
 				  TableGeneratorOptions opts)
 	{
-		return generateTable<StateT, MessageT>(
+		return generateTable<StateT, SymbolT>(
 			createSampleInformation(std::move(occurences), opts), opts);
 	}
 
-	template <typename StateT, typename MessageT>
-	DynamicCompressionTable<StateT, MessageT>
+	template <typename StateT, typename SymbolT>
+	DynamicCompressionTable<StateT, SymbolT>
 	generateTable(std::istream& sample, TableGeneratorOptions opts)
 	{
-		return generateTable<StateT, MessageT>(
-			generateProbabilities<MessageT>(sample), opts);
+		return generateTable<StateT, SymbolT>(
+			generateProbabilities<SymbolT>(sample, opts), opts);
 	}
 
 } // namespace ANS

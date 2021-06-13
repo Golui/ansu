@@ -26,8 +26,8 @@ namespace ANS
 	public:
 		using DecompressResult = u64;
 		using StateT		   = typename Table::StateT;
-		using MessageT		   = typename Table::MessageT;
-		using MessageIndexT	   = typename Table::MessageIndexT;
+		using SymbolT		   = typename Table::SymbolT;
+		using ReducedSymbolT   = typename Table::ReducedSymbolT;
 		using TableT		   = Table;
 		// NB We can't alias Meta to ImplFullT, because the type is not defined
 		// yet!
@@ -46,18 +46,16 @@ namespace ANS
 
 		void setChunkSize(u64 n) { this->_chunkSize = n; }
 
-		void reset() { ((ImplFullT*) (this))->resetImpl(); }
+		void resetEncoder() { ((ImplFullT*) (this))->resetEncoderImpl(); }
 
 		template <typename Meta>
-		void loadState()
+		void resetDecoder(Meta& m)
 		{
-			((ImplFullT*) (this))->loadStateImpl();
+			((ImplFullT*) (this))->resetDecoderImpl(m);
 		}
 
-		template <typename Meta,
-				  typename T,
-				  class = std::enable_if<(sizeof(MessageT) >= sizeof(T))>>
-		void compress(backend::side_stream<T>& message,
+		template <typename Meta>
+		void compress(backend::side_stream<ReducedSymbolT>& message,
 					  backend::stream<StateT>& out,
 					  backend::stream<Meta>& meta)
 		{
@@ -68,7 +66,7 @@ namespace ANS
 		DecompressResult
 		decompress(backend::stream<StateT>& out,
 				   backend::stream<Meta>& meta,
-				   backend::stream<MessageIndexT>& message) const
+				   backend::stream<ReducedSymbolT>& message) const
 		{
 			return ((ImplFullT*) (this))->decompressImpl(out, meta, message);
 		}

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CLI11.hpp"
+#include "ansu/data/table_generator.hpp"
 #include "ansu/ints.hpp"
 #include "ansu/settings.hpp"
 
@@ -26,16 +27,19 @@ namespace ANS
 		{
 			struct Options
 			{
-				std::string inFilePath	  = "STDIN";
-				std::string outFilePath	  = "compressed.ansu";
-				u64 checkpoint			  = CHECKPOINT;
-				u32 channels			  = CHANNEL_COUNT;
-				u64 chunkSize			  = AVG_MESSAGE_LENGTH;
-				Alphabet alphabet		  = Alphabet::U8;
-				u32 tableSizeLog		  = 10;
-				std::string tableFilePath = "";
-				bool printSummary		  = false;
-				bool skipPrompt			  = false;
+				std::string inFilePath			= "STDIN";
+				std::string outFilePath			= "compressed.ansu";
+				u64 checkpoint					= CHECKPOINT;
+				u32 channels					= CHANNEL_COUNT;
+				u64 chunkSize					= AVG_MESSAGE_LENGTH;
+				Alphabet alphabet				= Alphabet::U8;
+				u32 tableSizeLog				= 10;
+				std::string tableFilePath		= "";
+				bool printSummary				= false;
+				bool skipPrompt					= false;
+				bool warnUnknownSymbol			= false;
+				strategies::Quantizer quantizer = strategies::Quantizer::Fast;
+				strategies::Spreader spreader	= strategies::Spreader::Fast;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;
@@ -63,11 +67,13 @@ namespace ANS
 		{
 			struct Options
 			{
-				std::string inFilePath	= "STDIN";
-				std::string outFilePath = "table.anstbl";
-				Alphabet alphabet		= Alphabet::U8;
-				u32 tableSizeLog		= 10;
-				bool skipPrompt			= false;
+				std::string inFilePath			= "STDIN";
+				std::string outFilePath			= "table.anstbl";
+				Alphabet alphabet				= Alphabet::U8;
+				u32 tableSizeLog				= 10;
+				bool skipPrompt					= false;
+				strategies::Quantizer quantizer = strategies::Quantizer::Fast;
+				strategies::Spreader spreader	= strategies::Spreader::Fast;
 			};
 
 			using OptionsP = std::shared_ptr<Options>;

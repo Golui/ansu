@@ -11,7 +11,7 @@ namespace ANS
 	template <typename SymbolT>
 	using OccurenceMap = std::unordered_map<SymbolT, u32>;
 	template <typename SymbolT>
-	using QunatizedMap = std::unordered_map<SymbolT, u32>;
+	using QuantizedMap = std::unordered_map<SymbolT, u32>;
 	template <typename SymbolT>
 	using ProbabilityMap = std::unordered_map<SymbolT, double>;
 
@@ -27,6 +27,19 @@ namespace ANS
 		std::vector<Symbol> data;
 	};
 
+	namespace strategies
+	{
+		enum struct Quantizer
+		{
+			Fast
+		};
+
+		enum struct Spreader
+		{
+			Fast
+		};
+	} // namespace strategies
+
 	struct TableGeneratorOptions
 	{
 		u32 tableSizeLog = 10;
@@ -34,58 +47,137 @@ namespace ANS
 		bool useFull = false;
 		u32 symbolWidth;
 
+		strategies::Quantizer quantizer = strategies::Quantizer::Fast;
+		strategies::Spreader spreader	= strategies::Spreader::Fast;
+
 		u32 tableSize() { return 1 << this->tableSizeLog; }
 	};
 
 	namespace strategies
 	{
 		template <typename SymbolT>
-		void quantizeFast(SampleInformation<SymbolT>& si,
-						  TableGeneratorOptions opts)
+		struct QuantizerBase
 		{
-			u32 used	= 0;
-			double maxv = 0;
-			u32 maxp	= 0;
-			for(u32 i = 0; i < si.data.size(); i++)
+			void operator()(SampleInformation<SymbolT>& si,
+							TableGeneratorOptions opts)
 			{
-				auto& symbol = si.data[i];
-				auto curQ	 = u32(floor(symbol.p * opts.tableSize()));
-				if(curQ == 0) curQ += 1;
-				used += curQ;
-				symbol.q = curQ;
-				if(symbol.p > maxv)
+				this->quantize(si, opts);
+			}
+			virtual void quantize(SampleInformation<SymbolT>& si,
+								  TableGeneratorOptions opts) = 0;
+			virtual ~QuantizerBase() {}
+		};
+
+		template <typename SymbolT>
+		struct QuantizeFast : public QuantizerBase<SymbolT>
+		{
+			virtual void quantize(SampleInformation<SymbolT>& si,
+								  TableGeneratorOptions opts) override
+			{
+				u32 used	= 0;
+				double maxv = 0;
+				u32 maxp	= 0;
+				for(u32 i = 0; i < si.data.size(); i++)
 				{
-					maxv = symbol.p;
-					maxp = i;
+					auto& symbol = si.data[i];
+					auto curQ	 = u32(floor(symbol.p * opts.tableSize()));
+					if(curQ == 0) curQ += 1;
+					used += curQ;
+					symbol.q = curQ;
+					if(symbol.p > maxv)
+					{
+						maxv = symbol.p;
+						maxp = i;
+					}
+				}
+				si.data[maxp].q += opts.tableSize() - used;
+				if(si.data[maxp].q <= 0)
+					throw std::runtime_error(
+						"Error: The used quantizer is too inaccurate for this "
+						"file. Please choose a different quantizer, or adjust "
+						"the "
+						"alphabet size.");
+			}
+		};
+
+		template <typename SymbolT, typename Data>
+		struct SpreaderBase
+		{
+			void operator()(Data& data,
+							const SampleInformation<SymbolT>& si,
+							TableGeneratorOptions opts)
+			{
+				this->spread(data, si, opts);
+			}
+			virtual void spread(Data& data,
+								const SampleInformation<SymbolT>& si,
+								TableGeneratorOptions opts) = 0;
+			virtual ~SpreaderBase() {}
+		};
+
+		template <typename SymbolT, typename Data>
+		struct SpreadFast : public SpreaderBase<SymbolT, Data>
+		{
+			virtual void spread(Data& data,
+								const SampleInformation<SymbolT>& si,
+								TableGeneratorOptions opts) override
+			{
+				u32 pos = 0;
+				u32 step =
+					(opts.tableSize() >> 1) + (opts.tableSize() >> 3) + 3;
+				u32 mask = opts.tableSize() - 1;
+				data.states.resize(opts.tableSize());
+				for(u32 i = 0; i < si.data.size(); i++)
+				{
+					auto& entry = si.data[i];
+					for(s32 j = 0; j < entry.q; j++)
+					{
+						data.states[pos] = i;
+						pos				 = (pos + step) & mask;
+					}
 				}
 			}
-			si.data[maxp].q += opts.tableSize() - used;
-			if(si.data[maxp].q <= 0)
-				throw std::runtime_error(
-					"Error: The used quantizer is too inaccurate for this "
-					"file. Please choose a different quantizer, or adjust the "
-					"alphabet size.");
+		};
+
+		template <typename SymbolT>
+		void quantize(Quantizer method,
+					  SampleInformation<SymbolT>& si,
+					  TableGeneratorOptions opts)
+		{
+			switch(method)
+			{
+				case Quantizer::Fast:
+				{
+					QuantizeFast<SymbolT>()(si, opts);
+					break;
+				}
+				default:
+				{
+					break;
+				}
+			}
 		}
 
 		template <typename SymbolT, typename Data>
-		void spreadFast(Data& data,
-						const SampleInformation<SymbolT>& si,
-						TableGeneratorOptions opts)
+		void spread(Spreader method,
+					Data& data,
+					SampleInformation<SymbolT>& si,
+					TableGeneratorOptions opts)
 		{
-			u32 pos	 = 0;
-			u32 step = (opts.tableSize() >> 1) + (opts.tableSize() >> 3) + 3;
-			u32 mask = opts.tableSize() - 1;
-			data.states.resize(opts.tableSize());
-			for(u32 i = 0; i < si.data.size(); i++)
+			switch(method)
 			{
-				auto& entry = si.data[i];
-				for(s32 j = 0; j < entry.q; j++)
+				case Spreader::Fast:
 				{
-					data.states[pos] = i;
-					pos				 = (pos + step) & mask;
+					SpreadFast<SymbolT, Data>()(data, si, opts);
+					break;
+				}
+				default:
+				{
+					break;
 				}
 			}
 		}
+
 	} // namespace strategies
 
 	template <typename SymbolT>
@@ -163,8 +255,9 @@ namespace ANS
 		ResultT result(si.data.size(), opts.tableSizeLog, opts.symbolWidth);
 		typename ResultT::Data data;
 		// TODO Make strategies an option
-		strategies::quantizeFast(si, opts);
-		strategies::spreadFast(data, si, opts);
+
+		strategies::quantize(opts.quantizer, si, opts);
+		strategies::spread(opts.spreader, data, si, opts);
 
 		data.start.resize(si.data.size());
 

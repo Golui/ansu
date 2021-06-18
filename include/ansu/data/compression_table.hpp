@@ -75,6 +75,7 @@ namespace ANS
 
 		virtual SymbolT alphabet(ReducedSymbolT index) const		 = 0;
 		virtual ReducedSymbolT reverseAlphabet(SymbolT symbol) const = 0;
+		virtual bool hasSymbolInAlphabet(SymbolT symbol) const		 = 0;
 
 		virtual ~CompressionTable() {}
 	};
@@ -189,6 +190,11 @@ namespace ANS
 			return reverseAlphabetMap.at(index);
 		}
 
+		virtual bool hasSymbolInAlphabet(SymbolT index) const
+		{
+			return reverseAlphabetMap.find(index) != reverseAlphabetMap.end();
+		}
+
 		void setData(Data dt)
 		{
 			this->data = dt;
@@ -287,6 +293,12 @@ namespace ANS
 		virtual ReducedSymbolT reverseAlphabet(SymbolT index) const override
 		{
 			return index;
+		}
+
+		virtual bool hasSymbolInAlphabet(SymbolT index) const
+		{
+			// TODO STUB
+			return true;
 		}
 
 		template <typename Archive>

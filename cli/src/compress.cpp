@@ -80,20 +80,45 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 			counts[((u8*) msgbuf)[k]]++;
 		}
 
+		u32 validSymbols = 0;
 		if(read != chunkByteSize || in.peek() == EOF)
 		{
 			for(; i < readSymbols - 1; i++)
 			{
-				msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
+				if(mainCtx.ansTable.hasSymbolInAlphabet(msgbuf[i]))
+				{
+					msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
+					validSymbols++;
+				} else if(opts->warnUnknownSymbol)
+				{
+					std::cerr << "Unknown symbol @ " << inSize + i / symbolWidth
+							  << std::endl;
+				}
 			}
-			auto last = InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
-			last.last = true;
-			msg << last;
+			if(mainCtx.ansTable.hasSymbolInAlphabet(msgbuf[i]))
+			{
+				auto last =
+					InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
+				last.last = true;
+				msg << last;
+			} else if(opts->warnUnknownSymbol)
+			{
+				std::cerr << "Unknown symbol @ " << inSize + i / symbolWidth
+						  << std::endl;
+			}
 		} else
 		{
 			for(; i < readSymbols; i++)
 			{
-				msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
+				if(mainCtx.ansTable.hasSymbolInAlphabet(msgbuf[i]))
+				{
+					msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
+					validSymbols++;
+				} else if(opts->warnUnknownSymbol)
+				{
+					std::cerr << "Unknown symbol @ " << inSize + i / symbolWidth
+							  << std::endl;
+				}
 			}
 		}
 		mainCtx.compress(msg, out, ometa);
@@ -163,6 +188,18 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 				entropy -= count / double(sum) * (log2(count / double(sum)));
 		}
 
+		auto entropy2percent = 100 / (symbolWidth << 3);
+
+		auto dataWrittenBytes = dataWritten * sizeof(std::fstream::char_type);
+		auto percentageFull	  = 100.0 * outSize / ((double) inSize);
+		auto percentageData	  = 100.0 * dataWrittenBytes / ((double) inSize);
+		auto percentageTheory = entropy * entropy2percent;
+
+		auto entropyFull = percentageFull / entropy2percent;
+		auto entropyData = percentageData / entropy2percent;
+
+		auto entrUnit = " bits/byte";
+
 		std::cout << std::setprecision(6);
 		std::cout << "Done! Took " << timeS << "s \n";
 		std::cout << "Stats:"
@@ -175,17 +212,19 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 				  << "Header size:      " << writer.getHeader().totalHeaderSize
 				  << "\n";
 		std::cout << "\t\t"
-				  << "Data size:      "
-				  << dataWritten * sizeof(std::fstream::char_type) << "\n";
+				  << "Data size:      " << dataWrittenBytes << "\n";
 		std::cout << "\t"
-				  << "Ratio:            " << 100.0 * outSize / ((double) inSize)
-				  << "%"
-				  << "\n";
+				  << "Ratio:\n"
+				  << "\t\t Full file:        " << percentageFull << "%\n"
+				  << "\t\t Without Header:   " << percentageData << "%\n"
+				  << "\t\t Theoretical best: " << percentageTheory << "%\n";
 		std::cout << "\t"
-				  << "Theoretical best: " << entropy * 12.5 << "%"
-				  << "\n";
-		std::cout << "\t"
-				  << "Entropy:          " << entropy << " bits/symbol\n";
+				  << "Entropy:\n"
+				  << "\t\t Full file:        " << entropyFull << entrUnit
+				  << "\n"
+				  << "\t\t Without Header:   " << entropyData << entrUnit
+				  << "\n"
+				  << "\t\t Theoretical best: " << entropy << entrUnit << "\n";
 	}
 
 	delete[] msgbuf;

@@ -42,6 +42,10 @@ void ANS::driver::compress::subRegister(CLI::App& app)
 				  opts->skipPrompt,
 				  "If using STDIN, ship the prompt message.");
 
+	sub->add_flag("--warn-unknown-symbol",
+				  opts->warnUnknownSymbol,
+				  "Warn if an unknown symbol is encountered in the file.");
+
 	sub->add_option(
 		"-c",
 		opts->checkpoint,

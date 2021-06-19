@@ -34,9 +34,13 @@ void ANS::driver::compress::subRegister(CLI::App& app)
 		"input file. (Legacy) If set to \"static\", table present in this "
 		"version of ANSU will be used.");
 
-	sub->add_flag("-s",
-				  opts->printSummary,
-				  "Whether to print a short summary after compressing or not.");
+	sub->add_option("-s",
+					opts->printSummary,
+					"Whether to print no, a human readable, or csv formatted "
+					"summary after compressing or not.")
+		->transform(
+			CLI::CheckedTransformer(SUMMARY_STR_TO_ENUM, CLI::ignore_case));
+	;
 
 	sub->add_flag("--skip-prompt",
 				  opts->skipPrompt,

@@ -20,8 +20,20 @@ namespace ANS
 			U16 = 16,
 		};
 
+		enum class SummaryType : int
+		{
+			None,
+			Human,
+			CSV
+		};
+
 		static const std::map<std::string, Alphabet> ALPHABET_STR_TO_ENUM {
 			{"8", Alphabet::U8}, {"16", Alphabet::U16}};
+
+		static const std::map<std::string, SummaryType> SUMMARY_STR_TO_ENUM {
+			{"none", SummaryType::None},
+			{"human", SummaryType::Human},
+			{"csv", SummaryType::CSV}};
 
 		namespace compress
 		{
@@ -35,7 +47,7 @@ namespace ANS
 				Alphabet alphabet				= Alphabet::U8;
 				u32 tableSizeLog				= 10;
 				std::string tableFilePath		= "";
-				bool printSummary				= false;
+				SummaryType printSummary		= SummaryType::None;
 				bool skipPrompt					= false;
 				bool warnUnknownSymbol			= false;
 				strategies::Quantizer quantizer = strategies::Quantizer::Fast;

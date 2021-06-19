@@ -166,7 +166,7 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 		return EXIT_FAILURE;
 	}
 
-	if(opts->printSummary)
+	if(opts->printSummary != ANS::driver::SummaryType::None)
 	{
 		auto end = std::chrono::steady_clock::now();
 		auto timeS =
@@ -200,31 +200,54 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 
 		auto entrUnit = " bits/byte";
 
-		std::cout << std::setprecision(6);
-		std::cout << "Done! Took " << timeS << "s \n";
-		std::cout << "Stats:"
-				  << "\n";
-		std::cout << "\t"
-				  << "Input size:       " << inSize << "\n";
-		std::cout << "\t"
-				  << "Output size:      " << outSize << "\n";
-		std::cout << "\t\t"
-				  << "Header size:      " << writer.getHeader().totalHeaderSize
-				  << "\n";
-		std::cout << "\t\t"
-				  << "Data size:      " << dataWrittenBytes << "\n";
-		std::cout << "\t"
-				  << "Ratio:\n"
-				  << "\t\t Full file:        " << percentageFull << "%\n"
-				  << "\t\t Without Header:   " << percentageData << "%\n"
-				  << "\t\t Theoretical best: " << percentageTheory << "%\n";
-		std::cout << "\t"
-				  << "Entropy:\n"
-				  << "\t\t Full file:        " << entropyFull << entrUnit
-				  << "\n"
-				  << "\t\t Without Header:   " << entropyData << entrUnit
-				  << "\n"
-				  << "\t\t Theoretical best: " << entropy << entrUnit << "\n";
+		switch(opts->printSummary)
+		{
+			case ANS::driver::SummaryType::Human:
+			{
+				std::cout << std::setprecision(6);
+				std::cout << "Done! Took " << timeS << "s \n";
+				std::cout << "Stats:"
+						  << "\n";
+				std::cout << "\t"
+						  << "Input size:       " << inSize << "\n";
+				std::cout << "\t"
+						  << "Output size:      " << outSize << "\n";
+				std::cout << "\t\t"
+						  << "Header size:      "
+						  << writer.getHeader().totalHeaderSize << "\n";
+				std::cout << "\t\t"
+						  << "Data size:      " << dataWrittenBytes << "\n";
+				std::cout << "\t"
+						  << "Ratio:\n"
+						  << "\t\t Full file:        " << percentageFull
+						  << "%\n"
+						  << "\t\t Without Header:   " << percentageData
+						  << "%\n"
+						  << "\t\t Theoretical best: " << percentageTheory
+						  << "%\n";
+				std::cout << "\t"
+						  << "Entropy:\n"
+						  << "\t\t Full file:        " << entropyFull
+						  << entrUnit << "\n"
+						  << "\t\t Without Header:   " << entropyData
+						  << entrUnit << "\n"
+						  << "\t\t Theoretical best: " << entropy << entrUnit
+						  << "\n";
+				break;
+			}
+			case ANS::driver::SummaryType::CSV:
+			{
+				std::cout << std::setprecision(6);
+				std::cout << timeS << ", " << inSize << ", " << outSize << ", "
+						  << writer.getHeader().totalHeaderSize << ", "
+						  << dataWrittenBytes << ", " << percentageFull << ", "
+						  << percentageData << ", " << percentageTheory << ", "
+						  << entropyFull << ", " << entropyData << ", "
+						  << entropy << "\n";
+				break;
+			}
+			default: break;
+		}
 	}
 
 	delete[] msgbuf;

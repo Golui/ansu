@@ -1,6 +1,6 @@
 #pragma once
 
-#include "data/compression_table.hpp"
+#include "ansu/data/compression_table.hpp"
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/cereal.hpp>

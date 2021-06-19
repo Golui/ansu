@@ -1,7 +1,7 @@
 #pragma once
 
-#include "data/compression_table.hpp"
-#include "impl/channel_compression_context.ipp"
+#include "ansu/data/compression_table.hpp"
+#include "ansu/impl/channel_compression_context.ipp"
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/cereal.hpp>

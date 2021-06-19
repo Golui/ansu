@@ -1,9 +1,9 @@
 #pragma once
 
 #include "ansu.hpp"
-#include "data/compression_table.hpp"
-#include "ints.hpp"
-#include "io/serialization.hpp"
+#include "ansu/data/compression_table.hpp"
+#include "ansu/ints.hpp"
+#include "ansu/io/serialization.hpp"
 
 #include <array>
 #include <cereal/cereal.hpp>
@@ -259,7 +259,7 @@ namespace ANS
 			template <typename Meta>
 			u64 readNextBlock(void* data, Meta& meta)
 			{
-				if(this->currentBlock == ((decltype(this->currentBlock))(-1)))
+				if(this->currentBlock == ((decltype(this->currentBlock)) (-1)))
 					return false;
 				auto ret = readBlock(this->currentBlock, data, meta);
 				this->currentBlock--;

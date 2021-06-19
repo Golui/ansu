@@ -1,5 +1,5 @@
 
-INCLUDE := include include/ansu lib/cereal/include
+INCLUDE := include lib/cereal/include
 SOURCE := src
 CLI_MODULE := cli
 SOURCE_VIVADO := vivado

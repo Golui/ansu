@@ -1,8 +1,8 @@
 #pragma once
 
-#include "data/ans_table.hpp"
-#include "ints.hpp"
-#include "util.hpp"
+#include "ansu/data/ans_table.hpp"
+#include "ansu/ints.hpp"
+#include "ansu/util.hpp"
 
 #include <stdexcept>
 #include <unordered_map>

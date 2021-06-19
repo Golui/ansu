@@ -1,9 +1,9 @@
 #pragma once
 
-#include "backend/stream.hpp"
-#include "data/compression_table.hpp"
-#include "ints.hpp"
-#include "settings.hpp"
+#include "ansu/backend/stream.hpp"
+#include "ansu/data/compression_table.hpp"
+#include "ansu/ints.hpp"
+#include "ansu/settings.hpp"
 
 #include <memory>
 

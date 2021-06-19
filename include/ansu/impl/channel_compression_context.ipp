@@ -1,12 +1,11 @@
 #pragma once
 
-#include "compression_context.hpp"
-#include "data/compression_table.hpp"
-#include "settings.hpp"
+#include "ansu/compression_context.hpp"
+#include "ansu/data/compression_table.hpp"
+#include "ansu/settings.hpp"
 
 #include <bitset>
 #include <cassert>
-#include <cereal/types/vector.hpp>
 #include <vector>
 
 #ifdef SOFTWARE
@@ -100,7 +99,7 @@ namespace ANS
 		}
 		void resetDecompressBuffer()
 		{
-			reverseMsg.reserve((u64)(this->_checkpointFrequency / 0.6));
+			reverseMsg.reserve((u64) (this->_checkpointFrequency / 0.6));
 		}
 
 		void resetEncoding(State& s)
@@ -275,7 +274,7 @@ namespace ANS
 			} else
 			{
 				auto negShift = std::min(
-					(u8)(this->allBitsRemaining - lowerAmnt), available);
+					(u8) (this->allBitsRemaining - lowerAmnt), available);
 				d |= (newd & MASK(negShift)) << lowerAmnt;
 				newd >>= negShift;
 			}

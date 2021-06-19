@@ -1,13 +1,13 @@
 #pragma once
 
-#include "backend/backend.hpp"
-#include "backend/stream.hpp"
-#include "data/ans_table.hpp"
-#include "data/compression_table.hpp"
-#include "impl/channel_compression_context.ipp"
-#include "ints.hpp"
-#include "settings.hpp"
-#include "util.hpp"
+#include "ansu/backend/backend.hpp"
+#include "ansu/backend/stream.hpp"
+#include "ansu/data/ans_table.hpp"
+#include "ansu/data/compression_table.hpp"
+#include "ansu/impl/channel_compression_context.ipp"
+#include "ansu/ints.hpp"
+#include "ansu/settings.hpp"
+#include "ansu/util.hpp"
 
 #define CONTROL_RESET_STATE 1
 #define CONTROL_ENCODE 2

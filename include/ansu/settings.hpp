@@ -1,3 +1,5 @@
+#pragma once
+
 #define __PRAGMA_SUB(x) _Pragma(#x)
 #define DO_PRAGMA(x) __PRAGMA_SUB(x)
 #define PRAGMA_HLS(x) DO_PRAGMA(HLS x)

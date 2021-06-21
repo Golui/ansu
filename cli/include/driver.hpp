@@ -48,8 +48,8 @@ namespace ANS
 				u32 tableSizeLog				= 10;
 				std::string tableFilePath		= "";
 				SummaryType printSummary		= SummaryType::None;
-				bool skipPrompt					= false;
-				bool warnUnknownSymbol			= false;
+				bool quiet						= false;
+				bool skipUnknown				= false;
 				strategies::Quantizer quantizer = strategies::Quantizer::Fast;
 				strategies::Spreader spreader	= strategies::Spreader::Fast;
 			};

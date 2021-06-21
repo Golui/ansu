@@ -225,8 +225,10 @@ namespace ANS
 						  backend::stream<StateT>& out,
 						  backend::stream<Meta>& meta)
 		{
-			bool hadLast = false;
-			for(u32 i = 0; i < this->_chunkSize / this->channelCount; i++)
+			bool hadLast = message.empty();
+			for(u32 i = 0;
+				i < this->_chunkSize / this->channelCount && !message.empty();
+				i++)
 			{
 				PRAGMA_HLS(pipeline ii = CHANNEL_COUNT)
 				for(u32 j = 0; j < this->channelCount; j++)

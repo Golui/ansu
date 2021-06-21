@@ -20,13 +20,14 @@ def mask(l):
 
 class ANS:
 
-	def __init__(self, raw_probabilities, *, table_size_log=16):
-		self.rprob = raw_probabilities
+	def __init__(self, raw_probs, *, table_size_log=16):
+		self.rprob = raw_probs.values()
+		self.alphabet = raw_probs.keys()
 		self.tsl = table_size_log
 		self.quantize = self._quantize_fast
 		self.spread = self._spread_fast
 
-		pdb.set_trace()
+#		pdb.set_trace()
 
 		self.quantize()
 		self.spread()
@@ -204,6 +205,8 @@ def pick_datatype(val):
 def comma_sep(what):
 	return ", ".join(str(x) for x in what)
 
+def reverse_alpha_util(what):
+	return ", ".join(f"{{{x}, {i}}}" for i, x in enumerate(what))
 
 def cify(ans, out):
 	dn = os.path.dirname(__file__)
@@ -224,7 +227,9 @@ def cify(ans, out):
 		"nb_bits": comma_sep(ans.nb_bits),
 		"nb": comma_sep(ans.nb(x) for x in range(ans.allen)),
 		"start": comma_sep(ans.start),
-		"adj_start": comma_sep(ans.adj_start)
+		"adj_start": comma_sep(ans.adj_start),
+		"alphabet": comma_sep(ans.alphabet),
+		"reverseAlphabet": reverse_alpha_util(ans.alphabet)
 	})
 
 	with open(out, "w") as f:

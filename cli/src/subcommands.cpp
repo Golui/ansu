@@ -42,13 +42,15 @@ void ANS::driver::compress::subRegister(CLI::App& app)
 			CLI::CheckedTransformer(SUMMARY_STR_TO_ENUM, CLI::ignore_case));
 	;
 
-	sub->add_flag("--skip-prompt",
-				  opts->skipPrompt,
-				  "If using STDIN, ship the prompt message.");
+	sub->add_flag(
+		"--quiet",
+		opts->quiet,
+		"Silence possible warnings. Use only if you know what you are doing.");
 
-	sub->add_flag("--warn-unknown-symbol",
-				  opts->warnUnknownSymbol,
-				  "Warn if an unknown symbol is encountered in the file.");
+	sub->add_flag(
+		"--skip-unknown-symbol",
+		opts->skipUnknown,
+		"Do not abort if an unknown symbol is encountered in the file.");
 
 	sub->add_option(
 		"-c",

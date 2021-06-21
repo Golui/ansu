@@ -7,7 +7,7 @@
 /**
  * Specify the number of encoding channels, i.e. encoders working in parallel.
  */
-#define CHANNEL_COUNT 2
+#define CHANNEL_COUNT 1
 
 /**
  * Specify the "average message length"; this is used excusively for tests.

@@ -42,7 +42,7 @@ namespace ANS
 
 	struct TableGeneratorOptions
 	{
-		u32 tableSizeLog = 10;
+		u32 tableSizeLog = -1;
 		// TODO
 		bool useFull = false;
 		u32 symbolWidth;
@@ -200,6 +200,11 @@ namespace ANS
 			{
 				(*it).second += 1;
 			}
+		}
+
+		if(opts.tableSizeLog == ((decltype(opts.tableSizeLog)) -1))
+		{
+			opts.tableSizeLog = ANS::integer::nextPowerOfTwo(result.size());
 		}
 
 		return result;

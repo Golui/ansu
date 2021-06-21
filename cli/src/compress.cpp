@@ -73,7 +73,6 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 		in.read((CharT*) msgbuf, chunkByteSize / streamCharSize);
 		u64 read		= in.gcount();
 		u64 readSymbols = read / symbolWidth;
-		inSize += read;
 
 		for(decltype(read) k = 0; k < read; k++)
 		{
@@ -83,29 +82,30 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 		u32 validSymbols = 0;
 		if(read != chunkByteSize || in.peek() == EOF)
 		{
-			for(; i < readSymbols - 1; i++)
+			// Since we may skip symbols, we need to figure out where the last
+			// valid one is.
+			auto actuaLast = readSymbols - 1;
+			while(!mainCtx.ansTable.hasSymbolInAlphabet(msgbuf[actuaLast]))
+				actuaLast--;
+			// Write the symbols except the last one...
+			for(; i < actuaLast; i++)
 			{
 				if(mainCtx.ansTable.hasSymbolInAlphabet(msgbuf[i]))
 				{
 					msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
 					validSymbols++;
-				} else if(opts->warnUnknownSymbol)
+				} else if(!opts->skipUnknown)
 				{
 					std::cerr << "Unknown symbol @ " << inSize + i / symbolWidth
-							  << std::endl;
+							  << ". Aborting." << std::endl;
+					std::exit(0);
 				}
 			}
-			if(mainCtx.ansTable.hasSymbolInAlphabet(msgbuf[i]))
-			{
-				auto last =
-					InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
-				last.last = true;
-				msg << last;
-			} else if(opts->warnUnknownSymbol)
-			{
-				std::cerr << "Unknown symbol @ " << inSize + i / symbolWidth
-						  << std::endl;
-			}
+			// ...and now write the last one, with the proper flag.
+			auto last = InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
+			last.last = true;
+			msg << last;
+			validSymbols++;
 		} else
 		{
 			for(; i < readSymbols; i++)
@@ -114,13 +114,17 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 				{
 					msg << InDataT(mainCtx.ansTable.reverseAlphabet(msgbuf[i]));
 					validSymbols++;
-				} else if(opts->warnUnknownSymbol)
+				} else if(!opts->skipUnknown)
 				{
 					std::cerr << "Unknown symbol @ " << inSize + i / symbolWidth
-							  << std::endl;
+							  << ". Aborting. " << std::endl;
+					std::exit(0);
 				}
 			}
+			if(msg.empty()) continue;
 		}
+
+		inSize += validSymbols * symbolWidth;
 		mainCtx.compress(msg, out, ometa);
 
 		while(!out.empty())
@@ -206,6 +210,18 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 			{
 				std::cout << std::setprecision(6);
 				std::cout << "Done! Took " << timeS << "s \n";
+				if(opts->skipUnknown && !opts->quiet)
+				{
+					std::cout
+						<< "CAUTION: The compressor was allowed to skip "
+						   "symbols, which is not reflected when calculating "
+						   "theoretical entropy and compression ratio. This "
+						   "may result in the calculated entropies/compression "
+						   "ratios lower than the theoretical best. "
+						   "Please keep that in mind when analysing the "
+						   "results."
+						<< std::endl;
+				}
 				std::cout << "Stats:"
 						  << "\n";
 				std::cout << "\t"
@@ -243,7 +259,23 @@ int compressTask(ANS::driver::compress::OptionsP opts,
 						  << dataWrittenBytes << ", " << percentageFull << ", "
 						  << percentageData << ", " << percentageTheory << ", "
 						  << entropyFull << ", " << entropyData << ", "
-						  << entropy << "\n";
+						  << entropy;
+				if(opts->skipUnknown && !opts->quiet)
+				{
+					std::cout
+						<< ", CAUTION: The compressor was allowed to skip "
+						   "symbols, which is not reflected when calculating "
+						   "theoretical entropy and compression ratio. This "
+						   "may result in the calculated entropies/compression "
+						   "ratios lower than the theoretical best. "
+						   "Please keep that in mind when analysing the "
+						   "results."
+						<< std::endl;
+				} else
+				{
+					std::cout << std::endl;
+				}
+
 				break;
 			}
 			default: break;
@@ -347,7 +379,7 @@ int ANS::driver::compress::run(OptionsP opts)
 			}
 		} else
 		{
-			if(opts->inFilePath == "STDIN" && !opts->skipPrompt)
+			if(opts->inFilePath == "STDIN" && !opts->quiet)
 			{
 				std::cout << "Compressing stdin. Input some data and then "
 							 "press Ctrl+d"

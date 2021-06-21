@@ -1,4 +1,5 @@
 #pragma once
+#include "ans/settings.hpp"
 #include "ansu.hpp"
 
 void hls_compress(ANS::backend::stream<message_t>& message,

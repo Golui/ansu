@@ -64,20 +64,24 @@ namespace ANS
 		u32 tableSize() const { return this->_tableSize; };
 		u32 symbolWidth() const { return this->_symbolWidth; };
 
-		virtual tables::Type type() const						 = 0;
-		virtual ReducedSymbolT states(StateT index) const		 = 0;
-		virtual StateT newX(StateT index) const					 = 0;
-		virtual EncodingTableT encodingTable(StateT index) const = 0;
-		virtual NbBitsDeltaT nbBitsDelta(StateT index) const	 = 0;
-		virtual NbBitsT nb(StateT index) const					 = 0;
-		virtual StateDeltaT start(ReducedSymbolT index) const	 = 0;
-		virtual StateT adjStart(ReducedSymbolT index) const		 = 0;
-
-		virtual SymbolT alphabet(ReducedSymbolT index) const		 = 0;
-		virtual ReducedSymbolT reverseAlphabet(SymbolT symbol) const = 0;
-		virtual bool hasSymbolInAlphabet(SymbolT symbol) const		 = 0;
-
-		virtual ~CompressionTable() {}
+		// TODO Convert to CRTP so that we have some contract with the
+		// interface... Virtual functions are no longer supported in Vivado.
+		//
+		//		virtual tables::Type type() const						 = 0;
+		//		virtual ReducedSymbolT states(StateT index) const		 = 0;
+		//		virtual StateT newX(StateT index) const					 = 0;
+		//		virtual EncodingTableT encodingTable(StateT index) const = 0;
+		//		virtual NbBitsDeltaT nbBitsDelta(StateT index) const	 = 0;
+		//		virtual NbBitsT nb(StateT index) const					 = 0;
+		//		virtual StateDeltaT start(ReducedSymbolT index) const	 = 0;
+		//		virtual StateT adjStart(ReducedSymbolT index) const		 = 0;
+		//
+		//		virtual SymbolT alphabet(ReducedSymbolT index) const		 =
+		// 0; 		virtual ReducedSymbolT reverseAlphabet(SymbolT symbol) const
+		// = 0; 		virtual bool hasSymbolInAlphabet(SymbolT symbol) const
+		// = 0;
+		//
+		//		virtual ~CompressionTable() {}
 	};
 
 	// TODO While this is parametrized, we assume the table is always stored as
@@ -149,48 +153,45 @@ namespace ANS
 			: Base(alphabetSize, tableSizeLog, symbolWidth), data(dt)
 		{}
 
-		virtual tables::Type type() const override { return tables::Dynamic; }
+		tables::Type type() const { return tables::Dynamic; }
 
-		virtual ReducedSymbolT states(StateT index) const
-		{
-			return data.states[index];
-		}
-		virtual StateT newX(StateT index) const { return data.newX[index]; }
+		ReducedSymbolT states(StateT index) const { return data.states[index]; }
+		StateT newX(StateT index) const { return data.newX[index]; }
 
-		virtual EncodingTableT encodingTable(StateT index) const
+		EncodingTableT encodingTable(StateT index) const
 		{
 			return data.encodingTable[index];
 		}
 
-		virtual NbBitsDeltaT nbBitsDelta(StateT index) const
+		NbBitsDeltaT nbBitsDelta(StateT index) const
 		{
 			return data.nbBitsDelta[index];
 		}
 
-		virtual NbBitsT nb(StateT index) const { return data.nb[index]; }
+		NbBitsT nb(StateT index) const { return data.nb[index]; }
 
-		virtual StateDeltaT start(ReducedSymbolT index) const
+		StateDeltaT start(ReducedSymbolT index) const
 		{
 			return data.start[index];
 		}
 
-		virtual StateT adjStart(ReducedSymbolT index) const
+		StateT adjStart(ReducedSymbolT index) const
 		{
 			return data.adjStart[index];
 		}
 
-		virtual SymbolT alphabet(ReducedSymbolT index) const
+		SymbolT alphabet(ReducedSymbolT index) const
 		{
 			// Do bounds checking
 			return data.alphabet.at(index);
 		}
 
-		virtual ReducedSymbolT reverseAlphabet(SymbolT index) const
+		ReducedSymbolT reverseAlphabet(SymbolT index) const
 		{
 			return reverseAlphabetMap.at(index);
 		}
 
-		virtual bool hasSymbolInAlphabet(SymbolT index) const
+		bool hasSymbolInAlphabet(SymbolT index) const
 		{
 			return reverseAlphabetMap.find(index) != reverseAlphabetMap.end();
 		}
@@ -215,7 +216,9 @@ namespace ANS
 			ar(size);
 			if(size != sizeof(SymbolT))
 			{
+#ifdef SOFTWARE
 				throw std::runtime_error("Incompatible table.");
+#endif
 			}
 			ar(this->_symbolWidth, this->data);
 			this->setData(this->data);
@@ -248,57 +251,51 @@ namespace ANS
 			: Base(ALPHABET_LENGTH, TABLE_SIZE_LOG, sizeof(message_t) << 3)
 		{}
 
-		virtual tables::Type type() const override { return tables::Static; }
+		tables::Type type() const { return tables::Static; }
 
-		virtual ReducedSymbolT states(StateT index) const override
+		ReducedSymbolT states(StateT index) const
 		{
 			return StaticTable::states[index];
 		}
 
-		virtual StateT newX(StateT index) const override
-		{
-			return StaticTable::new_x[index];
-		}
+		StateT newX(StateT index) const { return StaticTable::new_x[index]; }
 
-		virtual EncodingTableT encodingTable(StateT index) const override
+		EncodingTableT encodingTable(StateT index) const
 		{
 			return StaticTable::encoding_table[index];
 		}
 
-		virtual NbBitsDeltaT nbBitsDelta(StateT index) const override
+		NbBitsDeltaT nbBitsDelta(StateT index) const
 		{
 			return StaticTable::nb_bits_delta[index];
 		}
 
-		virtual NbBitsT nb(StateT index) const override
-		{
-			return StaticTable::nb[index];
-		}
+		NbBitsT nb(StateT index) const { return StaticTable::nb[index]; }
 
-		virtual StateDeltaT start(ReducedSymbolT index) const override
+		StateDeltaT start(ReducedSymbolT index) const
 		{
 			return StaticTable::start[index];
 		}
 
-		virtual StateT adjStart(ReducedSymbolT index) const override
+		StateT adjStart(ReducedSymbolT index) const
 		{
 			return StaticTable::adj_start[index];
 		}
 
-		virtual SymbolT alphabet(ReducedSymbolT index) const override
+		SymbolT alphabet(ReducedSymbolT index) const
 		{
-			return index;
+			return StaticTable::alphabet[index];
 		}
 
-		virtual ReducedSymbolT reverseAlphabet(SymbolT index) const override
+		ReducedSymbolT reverseAlphabet(SymbolT index) const
 		{
-			return index;
+			return StaticTable::reverseAlphabet.at(index);
 		}
 
-		virtual bool hasSymbolInAlphabet(SymbolT index) const
+		bool hasSymbolInAlphabet(SymbolT index) const
 		{
-			// TODO STUB
-			return true;
+			return StaticTable::reverseAlphabet.find(index)
+				   != StaticTable::reverseAlphabet.end();
 		}
 
 		template <typename Archive>

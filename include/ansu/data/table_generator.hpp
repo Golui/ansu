@@ -1,6 +1,6 @@
 #pragma once
 
-#include "data/compression_table.hpp"
+#include "ansu/data/compression_table.hpp"
 
 #include <algorithm>
 #include <iostream>

@@ -5,7 +5,6 @@
 #include "ansu/settings.hpp"
 
 #include <bitset>
-#include <cassert>
 #include <vector>
 
 #ifdef SOFTWARE
@@ -57,7 +56,7 @@ namespace ANS
 
 			Meta(u32 channelCount = 0) : channels(channelCount)
 			{
-				this->controlState = Container<StateT>(channels);
+				this->controlState = Container<StateT>();
 			}
 
 			bool operator==(const Meta other)
@@ -86,7 +85,7 @@ namespace ANS
 		Container<State> coders;
 		u32 lastChannel;
 		State master;
-		Container<ReducedSymbolT> reverseMsg;
+		std::vector<ReducedSymbolT> reverseMsg;
 		s32 symbolsInCurrentBlock = 0;
 
 	private:
@@ -94,7 +93,7 @@ namespace ANS
 		ChannelCompressionContext(u32 channelCount = 2, Table tbl = Table())
 			: channelCount(channelCount), ansTable(tbl)
 		{
-			this->coders = Container<State>(this->channelCount);
+			this->coders = Container<State>(); // TODO test with vector
 			this->resetEncoder();
 		}
 		void resetDecompressBuffer()
@@ -104,6 +103,7 @@ namespace ANS
 
 		void resetEncoding(State& s)
 		{
+			PRAGMA_HLS(inline)
 			s.x			  = ansTable.tableSize();
 			s.partial	  = 0;
 			s.partialBits = 0;
@@ -111,14 +111,22 @@ namespace ANS
 
 		void resetEncodingMaster(State& s)
 		{
+			PRAGMA_HLS(inline)
 			resetEncoding(s);
 			s.partialBits = this->allBitsRemaining;
 		}
 
 		void resetEncoderImpl()
 		{
-			for(u32 i = 0; i < this->channelCount; i++)
+			PRAGMA_HLS(inline)
+#ifdef SOFTWARE
+			const auto trips = this->channelCount;
+#else
+			constexpr auto trips = CHANNEL_COUNT;
+#endif
+			for(u32 i = 0; i < trips; i++)
 			{
+				PRAGMA_HLS(unroll)
 				resetEncoding(this->coders[i]);
 			}
 			resetEncodingMaster(master);
@@ -128,7 +136,12 @@ namespace ANS
 		void resetDecoderImpl(Meta& meta)
 		{
 			this->reverseMsg.clear();
-			for(u32 i = 0; i < this->channelCount; i++)
+#ifdef SOFTWARE
+			const auto trips = this->channelCount;
+#else
+			constexpr auto trips = CHANNEL_COUNT;
+#endif
+			for(u32 i = 0; i < trips; i++)
 			{
 				StateT channelState = meta.controlState[i];
 				State& a			= coders[i];
@@ -143,7 +156,7 @@ namespace ANS
 
 		void encodeSingle(State& s, ReducedSymbolT current)
 		{
-			PRAGMA_HLS(pipeline)
+			this->symbolsInCurrentBlock++;
 
 			NbBitsT nbBits;
 			// Recover number of bits
@@ -157,39 +170,47 @@ namespace ANS
 			// Get next state
 			s.x = ansTable.encodingTable(ansTable.start(current)
 										 + (s.x >> nbBits));
-			this->symbolsInCurrentBlock++;
+		}
+
+		void emitMeta(backend::stream<Meta>& meta)
+		{
+#ifdef SOFTWARE
+			const auto trips = this->channelCount;
+#else
+			constexpr auto trips = CHANNEL_COUNT;
+#endif
+			PRAGMA_HLS(inline)
+			Meta finished(this->channelCount);
+
+			finished.symbolsInBlock = this->symbolsInCurrentBlock;
+
+			for(u32 i = 0; i < trips; i++)
+			{
+				finished.controlState[i] =
+					this->coders[i].x - this->ansTable.tableSize();
+			}
+
+			meta << finished;
 		}
 
 		void mergeChannels(backend::stream<StateT>& out,
 						   backend::stream<Meta>& meta,
 						   bool hadLast)
 		{
-			PRAGMA_HLS(inline)
+#ifdef SOFTWARE
+			const auto trips = this->channelCount;
+#else
+			constexpr auto trips = CHANNEL_COUNT;
+#endif
 
-			auto emitMeta = [&]() {
-				PRAGMA_HLS(occurence CHECKPOINT)
-
-				Meta finished(this->channelCount);
-
-				for(u32 i = 0; i < this->channelCount; i++)
-				{
-					finished.controlState[i] =
-						this->coders[i].x - this->ansTable.tableSize();
-				}
-
-				finished.symbolsInBlock = this->symbolsInCurrentBlock;
-
-				meta << finished;
-			};
-			for(u32 j = 0; j < this->channelCount; j++)
+			for(u32 j = 0; j < trips; j++)
 			{
-				PRAGMA_HLS(unroll)
-
 				u32 k = j + this->lastChannel;
 				if(k >= this->channelCount) k -= this->channelCount;
 				State& s = this->coders[j];
 				if(s.partialBits > master.partialBits)
 				{
+					this->checkpointCounter++;
 					// Write them
 					master.partial |=
 						s.partial >> (s.partialBits - master.partialBits);
@@ -199,11 +220,11 @@ namespace ANS
 										 + master.partialBits;
 					master.partial = s.partial << (master.partialBits);
 
-					this->checkpointCounter++;
 					if(this->checkpointCounter == this->_checkpointFrequency)
 					{
+						PRAGMA_HLS(occurence cycle = CHECKPOINT)
 						this->checkpointCounter = 0;
-						emitMeta();
+						emitMeta(meta);
 					}
 				} else
 				{
@@ -217,21 +238,27 @@ namespace ANS
 				s.partial	  = 0;
 				s.partialBits = 0;
 			}
-
-			if(hadLast) emitMeta();
 		}
 
 		void compressImpl(backend::side_stream<ReducedSymbolT>& message,
 						  backend::stream<StateT>& out,
 						  backend::stream<Meta>& meta)
 		{
-			bool hadLast = message.empty();
+			// clang-format off
+			PRAGMA_HLS(interface axis port=message)
+			// clang-format on
+			bool hadLast = false;
 			for(u32 i = 0;
-				i < this->_chunkSize / this->channelCount && !message.empty();
+				i < AVG_MESSAGE_LENGTH / CHANNEL_COUNT && !message.empty();
 				i++)
 			{
 				PRAGMA_HLS(pipeline ii = CHANNEL_COUNT)
-				for(u32 j = 0; j < this->channelCount; j++)
+#ifdef SOFTWARE
+				const auto trips = this->channelCount;
+#else
+				constexpr auto trips = CHANNEL_COUNT;
+#endif
+				for(u32 j = 0; j < trips && !message.empty(); j++)
 				{
 					PRAGMA_HLS(unroll)
 					u32 k = j + this->lastChannel;
@@ -261,7 +288,12 @@ namespace ANS
 				//	std::cout << "Master: " << this->master.x << " "
 				//			  << std::bitset<32>(this->master.partial) << " "
 				//			  << (u32) this->master.partialBits << std::endl;
-				if(hadLast) break;
+				if(hadLast)
+				{
+					PRAGMA_HLS(occurence cycle = CHECKPOINT)
+					emitMeta(meta);
+					break;
+				}
 			}
 		}
 
@@ -323,10 +355,14 @@ namespace ANS
 					{
 						break;
 					} else
+					{
+#ifdef SOFTWARE
 						throw std::runtime_error(
 							"The decompression requires more bits than are "
 							"available, but there is data still elft in the "
 							"stream. This is a bug!");
+#endif
+					}
 				}
 
 				curDec.partialBits = this->ansTable.nbBitsDelta(curDec.x);
@@ -391,7 +427,7 @@ namespace ANS
 			this->master.partialBits =
 				this->allBitsRemaining - this->master.partialBits;
 			this->resetDecompressBuffer();
-			this->coders.resize(this->channelCount);
+			// this->coders.resize(this->channelCount);
 		}
 	};
 } // namespace ANS

@@ -1,4 +1,5 @@
 #include "ansu.hpp"
+#include "cereal/types/array.hpp"
 #include "data/table_generator.hpp"
 #include "driver.hpp"
 #include "io/archive.hpp"
@@ -24,6 +25,9 @@ std::streamsize getFileSize(T& file)
 	file.seekg(0, std::ios_base::beg);
 	return length;
 }
+
+template <typename... T>
+using MyVector = std::array<T..., CHANNEL_COUNT>;
 
 template <typename ContextT, typename SymbolT>
 int compressTask(ANS::driver::compress::OptionsP opts,
@@ -295,7 +299,7 @@ int compressWrapperGenerate(ANS::driver::compress::OptionsP opts,
 {
 	using SymbolT  = typename ANS::integer::fitting<(int) Alph>::type;
 	using TableT   = ANS::DynamicCompressionTable<u32, u32>;
-	using ContextT = ANS::ChannelCompressionContext<TableT>;
+	using ContextT = ANS::ChannelCompressionContext<TableT, MyVector>;
 
 	TableT table = ANS::generateTable<u32, u32>(in, tableGenOpts);
 	in.seekg(0, std::ios_base::beg);
@@ -310,7 +314,7 @@ int compressWrapperLoad(ANS::driver::compress::OptionsP opts, std::istream& in)
 {
 	using SymbolT  = typename ANS::integer::fitting<(int) Alph>::type;
 	using TableT   = ANS::DynamicCompressionTable<>;
-	using ContextT = ANS::ChannelCompressionContext<TableT>;
+	using ContextT = ANS::ChannelCompressionContext<TableT, MyVector>;
 	std::ifstream tableFile(opts->tableFilePath);
 	TableT table	= ANS::io::loadTable<u32, u32>(tableFile);
 	auto mainCtxPtr = std::make_shared<ContextT>(opts->channels, table);
@@ -334,7 +338,8 @@ int ANS::driver::compress::run(OptionsP opts)
 	if(opts->tableFilePath == "static")
 	{
 		using ContextT =
-			ANS::ChannelCompressionContext<ANS::StaticCompressionTable>;
+			ANS::ChannelCompressionContext<ANS::StaticCompressionTable,
+										   MyVector>;
 		auto mainCtxPtr = std::make_shared<ContextT>(opts->channels);
 		return compressTask<ContextT, message_t>(opts, *in, mainCtxPtr);
 	} else

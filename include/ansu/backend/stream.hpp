@@ -5,6 +5,7 @@
 #	include "software/sidechannel.ipp"
 #else
 #	include "hls/stream.ipp"
+#	include "hls/sidechannel.ipp"
 #endif
 
 namespace ANS

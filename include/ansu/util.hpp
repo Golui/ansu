@@ -4,7 +4,6 @@
 
 #include <cmath>
 #include <memory>
-#include <type_traits>
 
 #ifdef DEBUG
 #	include <iostream>

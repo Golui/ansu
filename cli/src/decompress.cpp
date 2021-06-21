@@ -1,4 +1,5 @@
 #include "ansu.hpp"
+#include "cereal/types/array.hpp"
 #include "driver.hpp"
 #include "fallocate.h"
 #include "io/archive.hpp"
@@ -17,18 +18,21 @@ void writeFile(S& os, T v)
 	os.write((char*) &v, sizeof(T));
 }
 
+template <typename... T>
+using MyVector = std::array<T..., CHANNEL_COUNT>;
+
 template <class Table>
 int decompressTask(mio::mmap_sink& out,
 				   ANS::io::ArchiveReader& reader,
 				   const ANS::io::SharedHeader& head)
 {
-	using ContextT		 = ANS::ChannelCompressionContext<Table>;
+	using ContextT		 = ANS::ChannelCompressionContext<Table, MyVector>;
 	using StateT		 = typename ContextT::StateT;
 	using SymbolT		 = typename ContextT::SymbolT;
 	using ReducedSymbolT = typename ContextT::ReducedSymbolT;
 	using Meta			 = typename ContextT::Meta;
 
-	auto ctx = reader.readContext<ANS::ChannelCompressionContext<Table>>();
+	auto ctx = reader.readContext<ContextT>();
 
 	StateT* readbuf = new StateT[head.blockSize];
 

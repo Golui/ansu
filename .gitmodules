@@ -3,7 +3,7 @@
 	url = https://github.com/USCiLab/cereal.git
 [submodule "lib/fallocate"]
 	path = cli/lib/fallocate
-	url = https://github.com/Cyberax/fallocate
+	url = https://github.com/Golui/fallocate.git
 [submodule "lib/mio"]
 	path = cli/lib/mio
 	url = https://github.com/mandreyel/mio
